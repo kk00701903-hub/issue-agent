@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Hub</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#073190">
+<link rel="icon" href="/icons/favicon-32.png" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
 <style>
   :root { --bg:#f6f5f2; --card:#fff; --ink:#1f2328; --mute:#6b7280; --line:#e3e1db; --accent:#073190; --ok:#1a7f4b; --warn:#b26a00; --bad:#c0362c; }
   @media (prefers-color-scheme: dark) {
@@ -142,6 +148,7 @@
   @media (prefers-color-scheme: dark) { .fl-warn, .fl-note.warn { background:#3a3220; color:#f0d58a; } }
   .hide { display:none !important; }
   h2 { font-size:16px; margin:20px 0 10px; }
+  @media (display-mode: standalone) { header { -webkit-app-region: drag; } header button, header nav, header input { -webkit-app-region: no-drag; } }
 </style>
 </head>
 <body>
@@ -156,6 +163,7 @@
     <button data-tab="settings">설정</button>
   </nav>
   <span class="spacer"></span>
+  <button id="install" class="btn primary hide" title="이 PC에 앱으로 설치">앱으로 설치</button>
   <span class="small" id="usage"></span>
 </header>
 <div id="banner" class="banner hide"></div>
@@ -198,7 +206,7 @@ function applyBranding(b, version) {
   document.title = b.product_name || "Agent Hub";
   $("#title").textContent = (b.product_name || "Agent Hub") + (b.customer_name ? " · " + b.customer_name : "");
   $("#logo").textContent = (b.logo_text || "AH").slice(0, 3);
-  if (b.accent) document.documentElement.style.setProperty("--accent", b.accent);
+  if (b.accent) { document.documentElement.style.setProperty("--accent", b.accent); const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = b.accent; }
   if (version) $("#logo").title = "버전 " + version;
 }
 
@@ -432,6 +440,13 @@ function setTab() { document.querySelectorAll("#nav button").forEach((b) => b.cl
 document.querySelectorAll("#nav button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; if (tab !== "flow") flowMounted = false; setTab(); }));
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (["home", "inbox", "flow", "log", "settings"].includes(t) && state) { tab = t; if (tab !== "flow") flowMounted = false; setTab(); } });
 if (["home", "inbox", "flow", "log", "settings"].includes(location.hash.slice(1))) { tab = location.hash.slice(1); setTab(); }
+
+// ---- PWA: 서비스 워커 등록과 「앱으로 설치」 버튼 ----
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("#install").classList.remove("hide"); });
+$("#install").addEventListener("click", async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("#install").classList.add("hide"); });
+window.addEventListener("appinstalled", () => $("#install").classList.add("hide"));
 refresh(); setInterval(refresh, 5000);
 </script>
 </body>

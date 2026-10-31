@@ -26,6 +26,7 @@ def password():
 FLOW_RE = re.compile(r"^/api/flows/([a-z]+)$")
 GEN_RE = re.compile(r"^/api/flows/([a-z]+)/generate$")
 STATIC_RE = re.compile(r"^/static/([A-Za-z0-9_.-]+)$")
+ICON_RE = re.compile(r"^/icons/([A-Za-z0-9_.-]+\.png)$")
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
@@ -46,6 +47,30 @@ def summarize(run):
         "cost_usd": run.get("cost_usd"),
         "errors": len(v.get("errors", [])),
         "warnings": len(v.get("warnings", [])),
+    }
+
+
+def manifest():
+    """PWA 매니페스트. 이름·색은 고객사 브랜딩을 따른다."""
+    b = store.config().get("branding", {}) or {}
+    name = b.get("product_name", "Agent Hub")
+    full = f"{name} · {b['customer_name']}" if b.get("customer_name") else name
+    accent = b.get("accent", "#073190")
+    return {
+        "name": full, "short_name": name, "id": "/", "start_url": "/", "scope": "/",
+        "display": "standalone", "display_override": ["window-controls-overlay", "standalone"],
+        "background_color": "#f6f5f2", "theme_color": accent, "lang": "ko",
+        "description": "PC에서 도는 Claude 에이전트 관리 화면",
+        "icons": [
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+        "shortcuts": [
+            {"name": "승인함", "url": "/#inbox", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "흐름", "url": "/#flow", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "로그", "url": "/#log", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192"}]},
+        ],
     }
 
 
@@ -116,12 +141,15 @@ class Handler(BaseHTTPRequestHandler):
     def _host_ok(self):
         return self.headers.get("Host", "").split(":")[0] in LOCAL_HOSTS
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8"):
+    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode("utf-8")
+        extra = dict(extra or {})
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", extra.pop("Cache-Control", "no-store"))
+        for k, v in extra.items():
+            self.send_header(k, v)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(data)
@@ -150,9 +178,19 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path in ("/", "/index.html"):
             return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if path == "/manifest.webmanifest":
+            return self._send(200, json.dumps(manifest(), ensure_ascii=False).encode("utf-8"), "application/manifest+json; charset=utf-8")
+        if path == "/sw.js":  # 서비스 워커는 범위(/)를 위해 최상위 주소로 내보낸다
+            return self._send(200, (STATIC / "sw.js").read_bytes(), "text/javascript; charset=utf-8", {"Service-Worker-Allowed": "/"})
+        m = ICON_RE.match(path)
+        if m and (STATIC / "icons" / m.group(1)).is_file():
+            return self._send(200, (STATIC / "icons" / m.group(1)).read_bytes(), "image/png", {"Cache-Control": "public, max-age=86400"})
+        if path == "/favicon.ico":
+            return self._send(200, (STATIC / "icons" / "favicon-32.png").read_bytes(), "image/png")
         m = STATIC_RE.match(path)
         if m and (STATIC / m.group(1)).is_file():
-            ctype = "text/javascript; charset=utf-8" if m.group(1).endswith(".js") else "text/plain; charset=utf-8"
+            ext = m.group(1).rsplit(".", 1)[-1]
+            ctype = {"js": "text/javascript; charset=utf-8", "html": "text/html; charset=utf-8", "css": "text/css; charset=utf-8"}.get(ext, "text/plain; charset=utf-8")
             return self._send(200, (STATIC / m.group(1)).read_bytes(), ctype)
         if path == "/api/session":
             cfg = store.config()

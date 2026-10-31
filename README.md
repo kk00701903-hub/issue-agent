@@ -1,4 +1,4 @@
-# Agent Hub v0.4
+# Agent Hub v0.5
 
 빠른 시작(Windows): `install.bat` → `.env` 채우기 → `run.bat`. 사용자 매뉴얼은 `docs/manual.md`, 판매 준비 상태는 `docs/release-checklist.md`.
 
@@ -26,6 +26,9 @@ PC에서 도는 Claude 에이전트(릴스 제작·검수)와 로컬 관리 화�
 - 라이선스: 첫 실행부터 30일 평가판, 이후 키 필요. 발급은 `python -m hub.license issue --customer "고객사" --secret <비밀문자열>`. 현재 HMAC 방식이라 정식 판매 전 공개키 서명으로 바꿀 것(체크리스트).
 - 브랜딩: `hub/config.json`의 `branding`(제품명·고객사·로고 글자·강조색).
 - 흐름: 「흐름」 탭에서 「AI로 만들기」로 설명만 적으면 노드가 만들어지고, 선 위로 작업 흐름·실행 중 표시가 움직입니다. 저장 위치 `data/flows.json`.
+
+## PC에 앱으로 설치(PWA)
+`run.bat` 으로 켠 뒤 화면 오른쪽 위 「앱으로 설치」를 누르면 바탕화면·작업 표시줄에서 여는 앱이 됩니다. 서버가 꺼져 있으면 안내 화면이 뜨고, `autostart-on.bat` 을 한 번 실행하면 PC를 켤 때 서버가 창 없이 자동으로 켜집니다. 자세한 내용은 `docs/manual.md` 1-1.
 
 ## 웹 읽기(Agent-Reach)
 공통 에이전트 web-reader가 Agent-Reach로 웹·유튜브 자막·깃허브를 읽기 전용으로 가져옵니다. 기본 허용 채널은 web·youtube·github이고, 인스타·X·페이스북은 훅이 막습니다. 설치와 계정 보호 이유는 `docs/web-reader-setup.md`.

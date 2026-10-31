@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Hub — 서버 꺼짐</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1f2328; --mute:#6b7280; --line:#e3e1db; --accent:#073190; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --card:#1f2226; --ink:#e8e8e6; --mute:#9aa0a6; --line:#33373c; --accent:#7ea2ff; } }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui, "Malgun Gothic", sans-serif; padding:16px; box-sizing:border-box; }
+  .card { max-width:460px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
+  h1 { font-size:18px; margin:0 0 8px; }
+  ol { padding-left:20px; margin:10px 0; }
+  code { background:var(--bg); padding:1px 6px; border-radius:6px; }
+  button { margin-top:12px; border:0; background:var(--accent); color:#fff; border-radius:10px; padding:8px 16px; font:inherit; cursor:pointer; }
+  .small { color:var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>관리 서버가 꺼져 있습니다</h1>
+    <div>앱 화면은 열렸지만, 에이전트 데이터는 이 PC의 관리 서버가 켜져 있어야 보입니다.</div>
+    <ol>
+      <li>Agent Hub 폴더(예: <code>C:\dev\agent</code>)의 <code>run.bat</code> 을 실행합니다.</li>
+      <li>아래 「다시 연결」을 누릅니다.</li>
+    </ol>
+    <div class="small">PC를 켤 때마다 자동으로 켜지게 하려면 <code>autostart-on.bat</code> 을 한 번 실행하세요.</div>
+    <button onclick="location.replace('/')">다시 연결</button>
+  </div>
+  <script>setInterval(() => fetch('/api/session', { cache: 'no-store' }).then((r) => { if (r.ok) location.replace('/'); }).catch(() => {}), 4000);</script>
+</body>
+</html>
