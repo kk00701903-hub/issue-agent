@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "photocraft": {
+      "command": "photocraft-cli",
+      "args": ["mcp", "--automation-read-root", "data/media", "--automation-write-root", "data/media/out"]
+    },
+    "pdfcraft": {
+      "command": "pdfcraft-cli",
+      "args": ["mcp", "--automation-read-root", "data/media", "--automation-write-root", "data/media/out"]
+    }
+  }
+}

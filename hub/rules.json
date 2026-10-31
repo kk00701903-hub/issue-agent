@@ -1,0 +1,66 @@
+{
+  "banned_bgm": [
+    "M1",
+    "M3",
+    "M6"
+  ],
+  "world_series_prefix": "세계의",
+  "world_rotation": [
+    "M1",
+    "M3",
+    "M6"
+  ],
+  "female_voice": "ko-KR-SunHiNeural",
+  "reading_chars_per_sec": 6,
+  "min_scene_seconds": 2.5,
+  "link_pattern": "(https?://|www\\.|\\b[a-z0-9-]+\\.(com|kr|net|co|me|io)\\b)",
+  "order_mark_pattern": "\\d+\\s*/\\s*\\d+",
+  "conditional_words": [
+    "안 하면",
+    "않으면",
+    "모르면",
+    "놓치면",
+    "없으면",
+    "전에",
+    "전까지"
+  ],
+  "browser_block_words": [
+    "게시",
+    "공유",
+    "제출",
+    "등록",
+    "결제",
+    "삭제",
+    "탈퇴",
+    "publish",
+    "share",
+    "submit",
+    "post",
+    "pay",
+    "delete",
+    "checkout"
+  ],
+  "browser_allow_words": [
+    "i agree",
+    "release",
+    "임시저장",
+    "임시 저장"
+  ],
+  "web_reader_allowed_channels": [
+    "web",
+    "youtube",
+    "github"
+  ],
+  "web_reader_blocked_hosts": [
+    "instagram.com",
+    "x.com",
+    "twitter.com",
+    "facebook.com",
+    "threads.net",
+    "threads.com"
+  ],
+  "craft_versions": {
+    "photocraft": "고정할 버전 입력",
+    "pdfcraft": "고정할 버전 입력"
+  }
+}

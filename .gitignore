@@ -1,0 +1,8 @@
+.env
+data/runs/
+data/events.jsonl
+data/bgm_state.json
+__pycache__/
+*.pyc
+data/flows.json
+data/license.json

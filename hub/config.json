@@ -1,0 +1,12 @@
+{
+  "port": 4830,
+  "daily_budget_usd": 5.0,
+  "max_turns": 40,
+  "branding": {
+    "product_name": "Agent Hub",
+    "customer_name": "스튜디오 우히히시",
+    "logo_text": "AH",
+    "accent": "#073190"
+  },
+  "flow_model": "claude-sonnet-5-5"
+}
