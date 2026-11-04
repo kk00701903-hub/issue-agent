@@ -213,10 +213,14 @@ def generate(group_id, prompt, call=None):
     prompt = (prompt or "").strip()[:2000]
     if not prompt:
         return None, {"error": "만들고 싶은 흐름을 적어 주세요"}
-    model = store.config().get("flow_model", "claude-sonnet-5-5")
-    info = {"source": "ai", "model": model}
+    from hub import models
+    provider, _p, model = models.route("flow")
+    info = {"source": "ai", "model": model, "provider": provider}
     try:
-        text, usage = (call or _call_claude)(_system_prompt(g, agents), prompt, model)
+        if call:  # 시험용 가짜 호출
+            text, usage = call(_system_prompt(g, agents), prompt, model)
+        else:     # 설정(model_routes.flow)에 따라 Claude 또는 다른 제공자
+            text, usage, _meta = models.complete("flow", _system_prompt(g, agents), prompt)
         raw = _parse_json(text)
         info["usage"] = usage
     except Exception as e:  # noqa: BLE001 — 키 없음·네트워크·형식 오류는 규칙 기반으로

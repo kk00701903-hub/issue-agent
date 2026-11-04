@@ -1,4 +1,4 @@
-# Agent Hub v0.5
+# Agent Hub v0.6
 
 빠른 시작(Windows): `install.bat` → `.env` 채우기 → `run.bat`. 사용자 매뉴얼은 `docs/manual.md`, 판매 준비 상태는 `docs/release-checklist.md`.
 
@@ -25,7 +25,7 @@ PC에서 도는 Claude 에이전트(릴스 제작·검수)와 로컬 관리 화�
 - 로그인: `.env`의 `HUB_PASSWORD`(비우면 로그인 없음). 세션은 서버를 끄면 풀린다.
 - 라이선스: 첫 실행부터 30일 평가판, 이후 키 필요. 발급은 `python -m hub.license issue --customer "고객사" --secret <비밀문자열>`. 현재 HMAC 방식이라 정식 판매 전 공개키 서명으로 바꿀 것(체크리스트).
 - 브랜딩: `hub/config.json`의 `branding`(제품명·고객사·로고 글자·강조색).
-- 흐름: 「흐름」 탭에서 「AI로 만들기」로 설명만 적으면 노드가 만들어지고, 선 위로 작업 흐름·실행 중 표시가 움직입니다. 저장 위치 `data/flows.json`.
+- 흐름: 「자동화」 메뉴에서 「AI로 만들기」로 설명만 적으면 노드가 만들어지고, 선 위로 작업 흐름·실행 중 표시가 움직입니다. 저장 위치 `data/flows.json`.
 
 ## PC에 앱으로 설치(PWA)
 `run.bat` 으로 켠 뒤 화면 오른쪽 위 「앱으로 설치」를 누르면 바탕화면·작업 표시줄에서 여는 앱이 됩니다. 서버가 꺼져 있으면 안내 화면이 뜨고, `autostart-on.bat` 을 한 번 실행하면 PC를 켤 때 서버가 창 없이 자동으로 켜집니다. 자세한 내용은 `docs/manual.md` 1-1.
@@ -35,6 +35,19 @@ PC에서 도는 Claude 에이전트(릴스 제작·검수)와 로컬 관리 화�
 
 ## 그림·PDF 반복 처리(PhotoCraft·PdfCraft)
 오픈소스 PhotoCraft·PdfCraft(얼리 알파)로 규격 맞춤·변환·일괄 보정·PDF 합치기를 합니다. 새 그림 생성은 Firefly. 기본 꺼짐이며 설치·연결은 `docs/craft-tools-setup.md`.
+
+## 콘텐츠 캘린더·DM 자동 응답·AI 미디어 스튜디오 (2026-11-01)
+- 캘린더: 한 달 콘텐츠 계획표(난이도→주 몇 회→주제→유형→달력). `docs/benchmark-content-plan.md`, 저장 `data/plans/`.
+- 댓글→DM 자동 응답(팔로우 확인): 릴스 그룹 `dm-funnel`(예정). 설계와 주의점 `docs/benchmark-dm-funnel.md`.
+- 인스타 스킬 13종(instagram-agent-skill, MIT): 릴스 그룹 `insta-skills`(예정), 검수기 해시태그 5개 경고. `docs/instagram-agent-skill.md`.
+- 릴스 형식 「TOP10 랭킹 카운트다운」(HyperFrames)과 영상 속 도구 반영: `docs/reels-format-ranking.md`.
+- 릴스 형식 「진행자 + 위 카드 해설」(아래 진행자 그림 + 위 정보 카드, 끝은 팔로우·댓글 낱말·DM 자료): `tools/instagram/docs/reels-format-explainer.md`.
+- 도구 7개(magpie→모델 대체, coucou→데스크톱 알림, anatomy·replica 조사·Strata·PhotoCraft·영상 프롬프트): `docs/benchmark-tools-2026-11d.md`.
+- 그록 트레이딩 팀 영상 분석·도구 8개(FinceptTerminal·ml-intern·openscreen·LiteRT-LM·cua·free-claude-code·DeepTutor, ds2api 는 약관 문제로 제외): `docs/benchmark-tools-2026-11c.md`.
+- 모니터 화면(에이전트 카드 벽·별자리 연결도·처리율), 깃허브 도구 7개(VoiceStudio·Paperclip 개념·Vibe-Trading 백테스트만·God's Eye View·OpenMAIC·Magnitude 로컬 모델·Open SEO): `docs/benchmark-tools-2026-11b.md`.
+- 다른 AI 모델 8종(DeepSeek·Kimi·GLM·StepFun·Qwen·MiMo·Ling, Dreamina 는 후보): 작업별 모델 라우팅 `hub/models.py`, 원고·사내 자료는 Claude 만. `docs/alt-models.md`.
+- 도구 6개 검토(HyperFrames 적용·Claude Ads 예정·트레이딩 2종 보류·Camofox 미적용): `docs/benchmark-tools-2026-11.md`.
+- Open Generative AI(립싱크·카메라 값 시안): 공통 그룹 `media-studio`(예정). 그림은 Firefly, 영상은 Kling 그대로. `docs/media-studio-setup.md`.
 
 ## 크롬 통제
 사용자의 크롬을 `--remote-debugging-port=9222`로 띄우면 Playwright MCP가 그 창(사이드 패널 포함, 로그인 유지)에 붙습니다. 게시·공유·제출·등록·결제·삭제 버튼 클릭은 훅이 막고(`hub/rules.json`의 `browser_block_words`), LINE I Agree·Release, 카카오 임시저장만 통과합니다. 자세한 설정과 한계는 `docs/browser-setup.md`.
@@ -49,7 +62,7 @@ PC에서 도는 Claude 에이전트(릴스 제작·검수)와 로컬 관리 화�
 | `hub/rules.json` | 검수 규칙 값(금지 BGM, 읽기 속도 등) — 에이전트는 수정 불가 |
 | `hub/validators/reels_check.py` | 규칙 검수기 |
 | `hub/runner.py` | 실행기(실제 실행 / 드라이런) |
-| `hub/server.py`, `hub/static/index.html` | 관리 화면(현황·승인함·로그) |
+| `hub/server.py`, `hub/static/` | 관리 화면(Jira식: 요약·보드·목록·승인함·자동화·에이전트·활동·설정). 화면 코드는 `app.js`·`app.css`, 흐름 편집기는 `flow.js` |
 | `docs/` | 후킹 26패턴, 패키지 스키마, 작업 기록(work-log.md) |
 | `data/` | 실행 기록·로그·BGM 순번(자동 생성) |
 

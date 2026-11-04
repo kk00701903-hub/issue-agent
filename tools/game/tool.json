@@ -1,0 +1,141 @@
+{
+  "id": "game",
+  "name": "게임 개발",
+  "category": "개발",
+  "icon": "🎮",
+  "team": {
+    "id": "game",
+    "title": "게임 개발 팀",
+    "lead": "game-dev",
+    "purpose": "게임 프로젝트의 컷씬 대본·그림 프롬프트·코드·출시 등록 준비. 제출은 사람이 한다.",
+    "flow": [
+      {
+        "step": "컷씬 대본",
+        "who": "cutscene-writer",
+        "kind": "agent"
+      },
+      {
+        "step": "그림·영상 프롬프트",
+        "who": "art-director",
+        "kind": "agent"
+      },
+      {
+        "step": "그림 불량 검수",
+        "who": "image-checker",
+        "kind": "agent"
+      },
+      {
+        "step": "코드·빌드",
+        "who": "game-dev",
+        "kind": "agent"
+      },
+      {
+        "step": "출시 등록 화면",
+        "who": "store-release",
+        "kind": "browser"
+      },
+      {
+        "step": "제출",
+        "who": "사람",
+        "kind": "human"
+      }
+    ],
+    "agents": [
+      {
+        "name": "cutscene-writer",
+        "title": "컷씬 대본",
+        "state": "planned",
+        "role": "프로젝트의 컷씬 스타일 가이드대로 쓴다. 감정을 이름으로 말하지 않기, 인과 해설 금지, 소품은 먼저 심기, 한 컷 자막 길이 제한.",
+        "tools": "Read, Write",
+        "forbidden": "스타일 가이드 수정"
+      },
+      {
+        "name": "art-director",
+        "title": "그림·영상 프롬프트",
+        "state": "planned",
+        "role": "캐릭터 참고 이미지를 앵커로 그림·영상 생성 프롬프트를 쓰고, 불량 7항목을 프롬프트에 넣는다. 결과는 image-checker가 고른다.",
+        "tools": "그림·영상 생성 MCP(Firefly·Kling 등), Read, Write",
+        "forbidden": "참고 이미지와 다른 인물로 바꾸기, 가짜 글자 넣기"
+      },
+      {
+        "name": "game-dev",
+        "title": "게임 코드",
+        "state": "planned",
+        "role": "Unity/WebGL·HTML5 코드 수정과 빌드. 요청한 부분만 고친다.",
+        "tools": "Read, Write, Edit, Bash, Unity MCP",
+        "forbidden": "커밋, 요청 밖 수정"
+      },
+      {
+        "name": "store-release",
+        "title": "출시 등록 보조",
+        "state": "planned",
+        "role": "플레이 스토어·앱 마켓 콘솔 등록 화면을 브라우저로 채운다. 제출은 사람이 한다.",
+        "tools": "browser-operator 위임",
+        "forbidden": "제출·결제"
+      },
+      {
+        "name": "telegram-reporter",
+        "title": "텔레그램 진행 보고",
+        "state": "planned",
+        "role": "긴 작업의 50%·100% 시점에 .env 의 텔레그램 봇 토큰으로 Bot API 진행 보고를 보낸다. 텔레그램 창에 타이핑하지 않는다.",
+        "tools": "Bash(curl)",
+        "forbidden": "브라우저·창 타이핑"
+      }
+    ]
+  },
+  "summary": "컷씬 대본·그림 프롬프트·코드·출시 등록 준비를 팀으로 나눠 돌립니다.",
+  "highlights": [
+    "컷씬 스타일 가이드 적용",
+    "캐릭터 앵커 프롬프트",
+    "출시 화면 채우기",
+    "제출은 사람이"
+  ],
+  "run": {
+    "agent": "cutscene-writer",
+    "output": "result.md",
+    "kind": "document",
+    "form": [
+      {
+        "key": "topic",
+        "label": "장면 요청",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "guide",
+        "label": "스타일 가이드 경로(선택)",
+        "type": "text"
+      },
+      {
+        "key": "details",
+        "label": "자세한 요청(선택)",
+        "type": "textarea"
+      }
+    ],
+    "prompt": [
+      "{agent} 서브에이전트의 역할로 아래 일을 한다(도구: {tool_name}).",
+      "- 요청: {topic}",
+      "{details_line}",
+      "- 결과는 {out} 에 마크다운으로 저장한다. 맨 위에 한 줄 요약, 맨 끝에 「확인 필요」 목록을 둔다.",
+      "- 커밋·삭제·게시·제출·결제는 하지 않는다. 근거를 모르는 사실·숫자는 「확인 필요」에 적는다.",
+      "- 스타일 가이드: {guide}"
+    ]
+  },
+  "settings": {},
+  "external": [],
+  "safety": [
+    "스토어 제출·결제는 사람이"
+  ],
+  "version": "1.0.0",
+  "default_agents": [
+    "cutscene-writer",
+    "art-director",
+    "game-dev",
+    "store-release",
+    "telegram-reporter",
+    "image-checker",
+    "browser-operator",
+    "desktop-operator"
+  ],
+  "order": 40
+}

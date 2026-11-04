@@ -8,5 +8,22 @@
     "logo_text": "AH",
     "accent": "#073190"
   },
-  "flow_model": "claude-sonnet-5-5"
+  "flow_model": "claude-sonnet-5-5",
+  "model_routes": {
+    "flow": {
+      "provider": "anthropic"
+    },
+    "trend": {
+      "provider": "anthropic"
+    },
+    "reels_draft": {
+      "provider": "anthropic"
+    }
+  },
+  "providers": {},
+  "agent_budgets_usd": {
+    "reels-maker": 3.0
+  },
+  "model_fallback": [],
+  "allow_legacy_license": true
 }

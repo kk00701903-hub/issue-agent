@@ -26,6 +26,8 @@
   const svgEl = (tag, attrs) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); return e; };
   const uid = () => "n" + Math.random().toString(36).slice(2, 7);
 
+  // 관리 화면(app.js)의 아이콘을 빌려 쓴다(없으면 빈칸)
+  const I = (n) => (typeof window.ic === "function" ? window.ic(n, 14, 2.2) : "");
   function mount(root, state, onSaved) {
     root.replaceChildren();
     const groups = state.groups;
@@ -44,15 +46,15 @@
     for (const x of groups) chips.append(el("button", { class: "fl-chip" + (x.id === group ? " on" : ""), onclick: () => { if (dirty && !confirm("저장하지 않은 변경이 있습니다. 버릴까요?")) return; group = x.id; flow = null; stopPlay(); mount(root, state, onSaved); } }, x.title.replace(" 그룹", "")));
     const status = el("span", { class: "small fl-status" });
     const tools = el("div", { class: "fl-tools" },
-      el("button", { class: "fl-btn ai", onclick: () => { aiOpen = !aiOpen; mount(root, state, onSaved); } }, "✨ AI로 만들기"),
-      el("button", { class: "fl-btn", onclick: () => (playing ? stopPlay() : play()) }, "▶ 흐름 재생"),
+      el("button", { class: "fl-btn ai", onclick: () => { aiOpen = !aiOpen; mount(root, state, onSaved); } }, I("automation"), "AI로 만들기"),
+      el("button", { class: "fl-btn", onclick: () => (playing ? stopPlay() : play()) }, I("play"), "흐름 재생"),
       el("span", { class: "fl-sep" }),
       el("button", { class: "fl-btn icon", title: "축소", onclick: () => zoom(scale / 1.15) }, "−"),
       el("button", { class: "fl-btn icon", title: "확대", onclick: () => zoom(scale * 1.15) }, "+"),
       el("button", { class: "fl-btn", onclick: () => { scale = null; render(); } }, "맞춤"),
       el("button", { class: "fl-btn", onclick: autoLayout }, "정렬"),
       el("span", { class: "fl-sep" }),
-      el("button", { class: "fl-btn", onclick: () => { flow = null; stopPlay(); mount(root, state, onSaved); } }, "되돌리기"),
+      el("button", { class: "fl-btn", title: "저장한 상태로 되돌리기", onclick: () => { flow = null; stopPlay(); mount(root, state, onSaved); } }, I("refresh"), "되돌리기"),
       el("button", { class: "fl-btn primary", onclick: save }, "저장"), status);
     root.append(el("div", { class: "fl-top" }, chips, tools));
 

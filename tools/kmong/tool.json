@@ -1,0 +1,58 @@
+{
+  "id": "kmong",
+  "name": "크몽 전문가 서비스",
+  "category": "재능 판매",
+  "icon": "🧑‍💼",
+  "order": 25,
+  "version": "1.0.0",
+  "summary": "크몽에 올릴 서비스 자료(제목·요약·상세 설명·3단 패키지·FAQ·미리보기 목록)를 만들고 크몽 등록 규칙(외부 연락처·절대 표현·패키지 가격 차이·최소 금액)을 코드로 검수한 뒤, 승인하면 등록 화면을 임시저장까지 채웁니다. 「검수 요청」 버튼은 사람이 누릅니다.",
+  "highlights": ["서비스 자료 패키지", "크몽 등록 규칙 자동 검수", "3단 패키지 가격표", "등록 화면 임시저장까지", "검수 요청은 사람이"],
+  "team": {
+    "id": "kmong",
+    "title": "크몽 판매 팀",
+    "lead": "kmong-planner",
+    "purpose": "크몽 전문가 서비스 등록 자료를 만들고 규칙 검수 뒤 등록 화면을 임시저장까지 채운다. 검수 요청·가격 변경·메시지 답장은 사람이 한다.",
+    "flow": [
+      {"step": "시장 조사", "who": "kmong-researcher", "kind": "agent"},
+      {"step": "서비스 자료 작성", "who": "kmong-planner", "kind": "agent"},
+      {"step": "규칙 검수", "who": "kmong-checker", "kind": "code"},
+      {"step": "메인 이미지·미리보기", "who": "사람(그림 생성)", "kind": "human"},
+      {"step": "승인", "who": "사람", "kind": "human"},
+      {"step": "등록 화면 채우기(임시저장)", "who": "kmong-uploader", "kind": "browser"},
+      {"step": "검수 요청", "who": "사람", "kind": "human"}
+    ],
+    "status_step": {"queued": 1, "running": 1, "validating": 2, "validation_failed": 2, "awaiting_approval": 4, "rejected": 4, "approved": 5, "error": 1},
+    "agents": [
+      {"name": "kmong-researcher", "title": "크몽 시장 조사", "state": "planned", "role": "같은 카테고리의 공개 서비스 페이지(제목·가격대·패키지 구성·리뷰 수)를 읽어 가격대와 차별점을 정리한다. 남의 문구·이미지는 베끼지 않는다.", "tools": "web-reader 위임, WebSearch, Read, Write", "forbidden": "남의 서비스 문구·이미지 복제, 로그인 화면 수집"},
+      {"name": "kmong-planner", "title": "서비스 자료 작성", "state": "active", "role": "주제·판매 형태를 받아 제목·카테고리·요약·상세 설명·3단 패키지(가격·작업일·수정 횟수·제공 내용)·FAQ·검색 키워드·미리보기 목록을 package.json 으로 만든다. 저장 뒤 검수기로 오류가 0이 될 때까지 고친다.", "tools": "Read, Write, Bash, Skill(kmong-listing)", "forbidden": "외부 연락처·외부 결제 유도 문구, 증빙 없는 경력·수익 주장, 크몽 화면 조작"},
+      {"name": "kmong-checker", "title": "크몽 규칙 검수(코드)", "state": "active", "role": "외부 연락처(전화·메일·SNS·링크), 절대 표현(최고·최초·유일 등), 무조건 보증 표현, 「문의주세요」 가격, 패키지 간 가격 차이 1만 원 이상, 판매 형태별 최소 금액, 전자책 미리보기 5장 이상을 코드로 검사한다.", "tools": "없음(Python)", "forbidden": "-"},
+      {"name": "kmong-uploader", "title": "크몽 등록 화면 채우기", "state": "planned", "role": "승인된 자료로 크몽 판매자 서비스 등록 화면을 브라우저로 채우고 임시저장까지 한다. 「검수 요청」·「판매 시작」·가격 변경 저장은 사람이 누른다.", "tools": "browser-operator 위임, Read", "forbidden": "검수 요청·판매 시작 버튼 누르기, 비밀번호 입력, 메시지 답장, 주문 수락"},
+      {"name": "kmong-reply-draft", "title": "문의 답장 초안", "state": "planned", "role": "사람이 붙여 넣은 의뢰인 문의에 답장 초안을 쓴다(외부 연락처·외부 결제 유도 없이). 보내기는 사람이 한다.", "tools": "Read, Write", "forbidden": "메시지 보내기, 외부 연락처 안내, 주문 전 개인정보 요구"}
+    ]
+  },
+  "default_agents": ["kmong-researcher", "kmong-planner", "kmong-checker", "kmong-uploader", "kmong-reply-draft", "browser-operator", "web-reader", "image-checker", "design-critic"],
+  "run": {
+    "agent": "kmong-planner",
+    "output": "package.json",
+    "kind": "package",
+    "form": [
+      {"key": "topic", "label": "서비스 주제", "type": "text", "required": true, "placeholder": "예: 인스타 릴스 대본 10편 써 드립니다"},
+      {"key": "kind", "label": "판매 형태", "type": "select", "options": [["service", "용역(작업해 드림)"], ["ebook", "전자책"], ["knowhow", "노하우·자료·템플릿"]]},
+      {"key": "category", "label": "카테고리(선택)", "type": "text", "placeholder": "예: 마케팅 > SNS 마케팅"},
+      {"key": "details", "label": "자세한 요청(선택)", "type": "textarea"}
+    ],
+    "prompt": [
+      "kmong-planner 서브에이전트의 역할로 크몽 서비스 등록 자료를 만든다.",
+      "- 주제: {topic}\n- 판매 형태: {kind}\n- 카테고리: {category}",
+      "{details_line}",
+      "- 먼저 스킬 kmong-listing 을 불러오고 tools/kmong/docs/kmong-rules.md 를 읽는다.",
+      "- 결과는 {out} 에 tools/kmong/docs/kmong-schema.md 스키마의 JSON 으로 저장한다.",
+      "- 저장한 뒤 `python -m tools.kmong.validator {out}` 로 검수하고, 오류가 없을 때까지 고친다.",
+      "- 크몽 화면을 열거나 등록하지 않는다. 경력·수익·수상은 사용자가 준 증빙이 있을 때만 쓰고, 없으면 notes 에 확인 필요로 적는다."
+    ]
+  },
+  "validator": true,
+  "settings": {"seller_name": "", "default_days": "3"},
+  "external": [],
+  "safety": ["크몽 「검수 요청」·「판매 시작」·주문 수락·메시지 보내기는 사람이", "외부 연락처·외부 결제 유도 문구는 검수기가 막음", "남의 서비스 문구·이미지 복제 안 함"]
+}

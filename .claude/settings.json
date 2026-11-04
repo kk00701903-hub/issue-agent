@@ -4,7 +4,23 @@
       {
         "matcher": "Bash|Write|Edit|NotebookEdit|mcp__playwright__.*",
         "hooks": [
-          { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_guard.py\"" }
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_guard.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_guard.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_log.py\""
+          }
         ]
       }
     ],
@@ -12,7 +28,30 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_log.py\"" }
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_log.py\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_log.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_log.py\""
+          }
         ]
       }
     ]

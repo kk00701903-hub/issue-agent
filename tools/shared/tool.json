@@ -1,0 +1,140 @@
+{
+  "id": "shared",
+  "name": "공용 에이전트",
+  "category": "기본",
+  "icon": "🤝",
+  "team": {
+    "id": "shared",
+    "title": "공용 에이전트",
+    "lead": "browser-operator",
+    "purpose": "여러 도구가 위임해 쓰는 공용 에이전트(브라우저·웹 읽기·그림 처리 등). 도구에 연결해서 쓴다.",
+    "flow": [
+      {
+        "step": "웹·유튜브 읽기",
+        "who": "web-reader",
+        "kind": "agent"
+      },
+      {
+        "step": "브라우저 작업 위임",
+        "who": "browser-operator",
+        "kind": "browser"
+      },
+      {
+        "step": "최종 버튼",
+        "who": "사람",
+        "kind": "human"
+      }
+    ],
+    "agents": [
+      {
+        "name": "browser-operator",
+        "title": "크롬 통제",
+        "state": "active",
+        "role": "사용자의 크롬(로그인 유지)을 CDP로 붙잡아 페이지 이동·읽기·입력·파일 첨부를 한다. 게시·제출·결제·삭제 버튼은 훅이 막고, 그 직전 화면에서 멈춰 승인함에 올린다.",
+        "tools": "Playwright MCP(크롬 CDP), Read, Write",
+        "forbidden": "게시·제출·결제·삭제 클릭, 비밀번호 입력, 새 계정 로그인"
+      },
+      {
+        "name": "web-reader",
+        "title": "웹 읽기",
+        "state": "planned",
+        "role": "Agent-Reach로 웹·유튜브 자막·깃허브를 읽기 전용으로 가져와 요약과 출처를 남긴다. 인스타·X·페이스북은 계정 보호를 위해 막는다.",
+        "tools": "Bash(agent-reach), Read, Write",
+        "forbidden": "인스타·X·페이스북 채널, 게시·댓글, 키를 명령줄에 쓰기"
+      },
+      {
+        "name": "image-batch",
+        "title": "그림·PDF 반복 처리",
+        "state": "planned",
+        "role": "PhotoCraft·PdfCraft(오픈소스, 얼리 알파) CLI·MCP로 규격 맞춤·형식 변환·일괄 보정·PSD 내보내기·PDF 합치기를 한다. 새 그림 생성은 하지 않는다(Firefly).",
+        "tools": "Bash(photocraft-cli·pdfcraft-cli), Read, Write",
+        "forbidden": "원본 덮어쓰기, 그림 생성, ArtCraft 상표 사용"
+      },
+      {
+        "name": "media-studio",
+        "title": "AI 미디어 스튜디오",
+        "state": "planned",
+        "role": "Open Generative AI(MIT, muapi) 앱·muapi-cli로 립싱크(사진·영상+음성), 시네마 카메라 값(렌즈·조리개) 시안, 로컬 엔진(sd.cpp·Wan2GP) 비교 시안을 만든다. 그림 생성 기본은 Firefly, 영상 생성 기본은 Kling 그대로.",
+        "tools": "Bash(muapi만), Read, Write",
+        "forbidden": "키 다루기, 실존 인물 얼굴 립싱크, 원본 덮어쓰기, 결제·크레딧 구매, Firefly·Kling 대체"
+      },
+      {
+        "name": "voice-studio",
+        "title": "음성 스튜디오",
+        "state": "planned",
+        "role": "VoiceStudio(AGPL-3.0, 고객 PC에 따로 설치해 로컬 API로만 부름)로 참고 영상 받아쓰기(자막·대본 뽑기), 오디오북 시안, 더빙 시안을 만든다. 도구 설정에 정한 기본 음성은 그대로 쓴다.",
+        "tools": "VoiceStudio 로컬 API·MCP, Read, Write",
+        "forbidden": "남의 목소리 복제(본인 허락 없는 목소리, 실존 인물), Agent Hub 에 코드 섞기(AGPL)"
+      },
+      {
+        "name": "lesson-maker",
+        "title": "강의·학습 자료",
+        "state": "planned",
+        "role": "OpenMAIC(MIT)로 주제·자료를 넣어 슬라이드(PPTX)·퀴즈·인터랙티브 수업을 만든다. 교재·논문을 올려 질문 답변·퀴즈·개념 시각화를 하는 과외형 학습은 DeepTutor(Apache-2.0)로.",
+        "tools": "OpenMAIC·DeepTutor(웹앱), Read, Write",
+        "forbidden": "비공개 원고를 외부 모델로 보내기(모델은 등급 규칙)"
+      },
+      {
+        "name": "desktop-operator",
+        "title": "격리 PC 조작",
+        "state": "planned",
+        "role": "데스크톱 앱 작업을 한다. 기본 도구는 agent-desktop(npm, 실험 단계): 화면 캡처를 짐작하는 대신 운영체제 접근성 트리로 버튼·입력칸을 읽고 번호(ref)로 누른다. 쓰는 곳: 내 앱 시험, 반복 입력. 위험한 작업은 cua 격리 PC에서.",
+        "tools": "agent-desktop(snapshot·click·type), cua 샌드박스, Read, Write",
+        "forbidden": "게시·제출·결제·삭제·보내기 버튼(크롬 통제와 같은 금지어), 수익 계정 앱(인스타·카카오톡·LINE) 조작, 여러 에이전트 동시 조작으로 사람 작업 방해, 비밀번호 입력"
+      },
+      {
+        "name": "explainer-visual",
+        "title": "설명 입체 도해",
+        "state": "planned",
+        "role": "anatomy 스킬(MIT)처럼 원리를 마우스를 올리면 부품이 분리되는 입체 도해(HTML·SVG)로 만든다 — 설명 그림, 릴스 설명 장면, 시스템 구조도.",
+        "tools": "Skill(anatomy), Read, Write",
+        "forbidden": "남의 상표·캐릭터 그리기, 사진 같은 그림 생성(그림은 Firefly)"
+      },
+      {
+        "name": "design-critic",
+        "title": "디자인 검수",
+        "state": "planned",
+        "role": "「AI 티 나는 디자인」(뻔한 보라 그라데이션, 같은 카드 반복, 의미 없는 아이콘)을 찾아 고칠 곳을 표시한다 — 관리 화면, 카드뉴스, 표지, 판매 페이지.",
+        "tools": "Read, Skill(impeccable·taste-skill)",
+        "forbidden": "직접 수정, 정해진 양식 바꾸기"
+      }
+    ]
+  },
+  "core": true,
+  "summary": "브라우저·웹 읽기·그림 처리 같은 공용 에이전트. 다른 도구에 연결해서 씁니다(요금제와 무관하게 포함).",
+  "highlights": [
+    "크롬 통제(최종 버튼은 훅이 막음)",
+    "웹·유튜브 읽기",
+    "그림·PDF 일괄 처리"
+  ],
+  "settings": {},
+  "external": [
+    {
+      "name": "Agent-Reach",
+      "license": "MIT",
+      "how": "고객 PC에 따로 설치"
+    },
+    {
+      "name": "Playwright MCP",
+      "license": "Apache-2.0",
+      "how": "npx 로 실행"
+    }
+  ],
+  "safety": [
+    "게시·제출·결제·삭제 클릭은 훅이 막음",
+    "비밀번호 입력 안 함"
+  ],
+  "version": "1.0.0",
+  "default_agents": [
+    "browser-operator",
+    "web-reader",
+    "image-batch",
+    "media-studio",
+    "voice-studio",
+    "lesson-maker",
+    "desktop-operator",
+    "explainer-visual",
+    "design-critic"
+  ],
+  "order": 90
+}

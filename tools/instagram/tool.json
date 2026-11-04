@@ -1,0 +1,246 @@
+{
+  "id": "instagram",
+  "name": "인스타그램 릴스·카드뉴스",
+  "category": "SNS 마케팅",
+  "icon": "📱",
+  "team": {
+    "id": "reels",
+    "title": "인스타그램 팀",
+    "lead": "reels-maker",
+    "purpose": "인스타그램 릴스·카드뉴스 패키지(후킹·장면·대본·캡션·소개 댓글)를 만들어 규칙 검수 뒤 승인함까지 올린다. 게시·예약은 사람이 인스타그램 앱의 콘텐츠 예약으로 한다.",
+    "flow": [
+      {
+        "step": "주제 조사",
+        "who": "trend-scout",
+        "kind": "agent"
+      },
+      {
+        "step": "패키지 제작",
+        "who": "reels-maker",
+        "kind": "agent"
+      },
+      {
+        "step": "규칙 검수",
+        "who": "reels-validator",
+        "kind": "code"
+      },
+      {
+        "step": "의견 검수",
+        "who": "reels-reviewer",
+        "kind": "agent"
+      },
+      {
+        "step": "승인",
+        "who": "사람",
+        "kind": "human"
+      },
+      {
+        "step": "영상 제작",
+        "who": "reels-renderer",
+        "kind": "agent"
+      },
+      {
+        "step": "예약 화면 채우기",
+        "who": "insta-scheduler",
+        "kind": "browser"
+      },
+      {
+        "step": "예약·소개 댓글",
+        "who": "사람",
+        "kind": "human"
+      },
+      {
+        "step": "댓글→DM 자동 응답 설정",
+        "who": "dm-funnel",
+        "kind": "agent"
+      }
+    ],
+    "agents": [
+      {
+        "name": "trend-scout",
+        "title": "트렌드 조사",
+        "state": "planned",
+        "role": "당일 급상승 주제를 조사해 주제 후보 3개와 근거 링크를 낸다. 잘 된 경쟁 릴스·쇼츠는 web-reader로 자막을 읽어 구조(첫 3초·장면 순서)만 참고한다. 도구 설정의 관심 주제를 우선한다.",
+        "tools": "web-reader 위임, WebSearch, Read, Write",
+        "forbidden": "패키지 작성, 브라우저 조작"
+      },
+      {
+        "name": "reels-maker",
+        "title": "릴스 제작",
+        "state": "active",
+        "role": "계정과 주제를 받아 패키지(후킹·장면·대본·BGM 지정·캡션·소개 댓글)를 만든다.",
+        "tools": "Read, Write, Bash, Glob, Grep, Skill",
+        "forbidden": "커밋, 삭제, 게시, 예약, hub/·.claude/ 수정"
+      },
+      {
+        "name": "reels-validator",
+        "title": "규칙 검수(코드)",
+        "state": "active",
+        "role": "금지 BGM·로테이션, 캡션 링크, 장면 속도, 순서 표시, 계정별 필수 항목을 코드로 검사한다.",
+        "tools": "없음(Python)",
+        "forbidden": "-"
+      },
+      {
+        "name": "reels-reviewer",
+        "title": "의견 검수",
+        "state": "optional",
+        "role": "후킹의 관련성·교훈, 사실 확인 필요 표시 등 코드가 못 잡는 부분을 읽고 의견만 낸다.",
+        "tools": "Read, Glob, Grep",
+        "forbidden": "파일 수정"
+      },
+      {
+        "name": "reels-renderer",
+        "title": "영상 제작",
+        "state": "planned",
+        "role": "승인된 패키지로 사진·TTS 음성·BGM을 합쳐 세로 영상(1080×1920)을 만든다. 렌더링은 HyperFrames(HeyGen, Apache-2.0, 고객 PC에 따로 설치: HTML·CSS·JS → MP4)로 — 장면 글자·사진 펀치 줌·숫자 도장 같은 움직임을 코드로 만들어 영상 생성 AI 없이 만든다. 형식 틀: 「TOP10 랭킹 카운트다운」(tools/instagram/docs/reels-format-ranking.md), 「진행자 + 위 카드 해설」(tools/instagram/docs/reels-format-explainer.md).",
+        "tools": "Bash(npx hyperframes·ffmpeg), Read, Write",
+        "forbidden": "게시, 예약, 계정 설정의 금지 BGM 사용, 장면 속도 규칙 무시"
+      },
+      {
+        "name": "insta-scheduler",
+        "title": "인스타 예약 보조",
+        "state": "planned",
+        "role": "브라우저로 인스타 콘텐츠 예약 화면을 열어 영상·캡션·일시를 채우고 소개 댓글 문구를 준비한다. 마지막 「예약/공유」 버튼은 사람이 누른다.",
+        "tools": "browser-operator 위임",
+        "forbidden": "게시·예약 버튼 누르기"
+      },
+      {
+        "name": "dm-funnel",
+        "title": "댓글→DM 자동 응답",
+        "state": "planned",
+        "role": "릴스마다 댓글 키워드·DM 문구·팔로우 확인 단계를 설계한다(벤치마킹: 「팔로우 확인」 버튼 → 팔로우 여부 확인 → 자료·링크 전송). 링크는 캡션이 아니라 DM으로 보낸다. 설정은 ManyChat 등 Meta 공식 API 도구에서 하고 마지막 「켜기·게시」는 사람이 누른다.",
+        "tools": "Read, Write, browser-operator 위임",
+        "forbidden": "비공식 봇·비밀번호 로그인, 팔로우만 한 사람에게 먼저 DM, 무한 재확인, 켜기·게시 버튼 누르기"
+      },
+      {
+        "name": "insta-skills",
+        "title": "인스타 스킬 13종",
+        "state": "planned",
+        "role": "instagram-agent-skill(MIT, 키·로그인 없음) 13개 스킬을 우리 규칙에 맞춰 쓴다 — 지난 게시물 분석(ig-audit), 캡션 점검(ig-caption), 프로필 점수(ig-profile), 주간 계획(ig-plan→캘린더), 레퍼런스 릴스 순위(ig-viral, 사람이 모은 자료로만), 답글·스토리·재활용 초안. 글만 쓰고 게시·댓글·팔로우·DM은 사람이 한다.",
+        "tools": "Skill(ig-*), Read, Write",
+        "forbidden": "인스타 로그인·자동 게시·자동 댓글·자동 팔로우, 에이전트가 인스타 화면 수집, 우리 후킹 규칙보다 스킬 기본값 우선"
+      }
+    ],
+    "status_step": {
+      "queued": 1,
+      "running": 1,
+      "validating": 2,
+      "validation_failed": 2,
+      "awaiting_approval": 4,
+      "rejected": 4,
+      "approved": 5,
+      "error": 1
+    }
+  },
+  "summary": "주제만 넣으면 후킹·장면·대본·캡션·소개 댓글까지 든 릴스 패키지를 만들고, 장면 속도·캡션 링크·해시태그·BGM 규칙을 코드로 검수해 승인함에 올립니다.",
+  "highlights": [
+    "후킹 26패턴",
+    "장면 속도·캡션·BGM 자동 검수",
+    "계정별 규칙(음성/무음)",
+    "월간 콘텐츠 캘린더",
+    "승인 후 게시 안내(사람이 예약)"
+  ],
+  "run": {
+    "agent": "reels-maker",
+    "output": "package.json",
+    "kind": "package",
+    "form": [
+      {
+        "key": "account",
+        "label": "계정",
+        "type": "account",
+        "required": true
+      },
+      {
+        "key": "topic",
+        "label": "주제",
+        "type": "text",
+        "required": true,
+        "placeholder": "예: 전세 계약 전 꼭 확인할 3가지"
+      },
+      {
+        "key": "series",
+        "label": "시리즈(선택)",
+        "type": "text"
+      },
+      {
+        "key": "type",
+        "label": "유형",
+        "type": "select",
+        "options": [
+          [
+            "general",
+            "일반"
+          ],
+          [
+            "person",
+            "인물"
+          ]
+        ]
+      }
+    ],
+    "prompt": [
+      "reels-maker 서브에이전트의 역할로 릴스 패키지를 만든다.",
+      "- 계정: {account}\n- 시리즈: {series}\n- 유형: {type}\n- 주제: {topic}",
+      "- 먼저 스킬 {skill} 을 불러오고 tools/instagram/docs/hooking-patterns.md 에서 후킹 패턴을 고른다.",
+      "- 결과는 {out} 에 tools/instagram/docs/package-schema.md 스키마의 JSON 으로 저장한다.",
+      "- 저장한 뒤 `python -m tools.instagram.validator {out}` 로 검수하고, 오류가 없을 때까지 고친다.",
+      "- 커밋·삭제·게시는 하지 않는다. 근거를 모르는 숫자는 쓰지 않고 notes 에 확인 필요로 적는다."
+    ]
+  },
+  "validator": true,
+  "publish": true,
+  "calendar": true,
+  "settings": {
+    "accounts": [
+      {
+        "id": "my.account",
+        "label": "내 계정",
+        "profile": "voice",
+        "skill": "insta-reels",
+        "person_intro": false
+      }
+    ],
+    "interest_topics": [
+      "생활 꿀팁"
+    ]
+  },
+  "external": [
+    {
+      "name": "Edge TTS(음성)",
+      "license": "MIT",
+      "how": "고객 PC에 pip 설치"
+    },
+    {
+      "name": "HyperFrames(영상 렌더링)",
+      "license": "Apache-2.0",
+      "how": "고객 PC에 npx 로 실행"
+    },
+    {
+      "name": "instagram-agent-skill",
+      "license": "MIT",
+      "how": "선택: 스킬 폴더에 따로 받기"
+    }
+  ],
+  "safety": [
+    "자동 게시·자동 댓글·자동 팔로우·DM 자동 발송 없음 — 마지막 버튼은 사람이",
+    "인스타·X·페이스북 화면 수집 안 함(계정 보호)"
+  ],
+  "version": "1.0.0",
+  "default_agents": [
+    "trend-scout",
+    "reels-maker",
+    "reels-validator",
+    "reels-reviewer",
+    "reels-renderer",
+    "insta-scheduler",
+    "dm-funnel",
+    "insta-skills",
+    "web-reader",
+    "browser-operator",
+    "image-checker",
+    "media-studio",
+    "design-critic"
+  ],
+  "order": 10
+}

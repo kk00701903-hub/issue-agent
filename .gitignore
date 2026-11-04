@@ -6,3 +6,15 @@ __pycache__/
 *.pyc
 data/flows.json
 data/license.json
+
+# 판매 묶음·콘솔 데이터·비밀키
+dist/
+cloud/data/
+.secrets/
+
+# 개인 작업 데이터·원본 동작 파일·로컬 설정(올리지 않음)
+data/
+_mixamo/
+_apply/
+.claude/settings.local.json
+*.blend1

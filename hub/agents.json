@@ -42,9 +42,9 @@
           "name": "reels-renderer",
           "title": "영상 제작",
           "state": "planned",
-          "role": "승인된 패키지로 사진·TTS(여자 음성)·BGM을 합쳐 영상 파일을 만든다. 인수인계서 v3 절차를 따른다.",
-          "tools": "Bash, Read, Write",
-          "forbidden": "게시, 예약"
+          "role": "승인된 패키지로 사진·TTS(여자 음성)·BGM을 합쳐 영상 파일을 만든다. 인수인계서 v3 절차를 따른다. 렌더링은 HyperFrames(HeyGen, Apache-2.0, HTML·CSS·JS → MP4, 1080×1920)로 — 장면 글자·실사진 펀치 줌·번쩍·숫자 도장·진행자 그림 입 모양 같은 움직임을 코드로 만들어 영상 생성 AI 없이 만든다. 코드로 만드는 모션그래픽·3D 장면 예시는 awesome-opus5-5-videos(프롬프트 703개, MIT)를 참고한다. 형식 틀: 「TOP10 랭킹 카운트다운」(docs/reels-format-ranking.md), 「진행자 + 위 카드 해설」(tools/instagram/docs/reels-format-explainer.md).",
+          "tools": "Bash(npx hyperframes·ffmpeg), Read, Write",
+          "forbidden": "게시, 예약, 금지 BGM(M1·M3·M6, 「세계의 ○○」 로테이션 예외), 장면 속도 규칙 무시"
         },
         {
           "name": "insta-scheduler",
@@ -53,6 +53,22 @@
           "role": "브라우저로 인스타 콘텐츠 예약 화면을 열어 영상·캡션·일시를 채우고 소개 댓글 문구를 준비한다. 마지막 「예약/공유」 버튼은 사람이 누른다.",
           "tools": "browser-operator 위임",
           "forbidden": "게시·예약 버튼 누르기"
+        },
+        {
+          "name": "dm-funnel",
+          "title": "댓글→DM 자동 응답",
+          "state": "planned",
+          "role": "릴스마다 댓글 키워드·DM 문구·팔로우 확인 단계를 설계한다(벤치마킹: 「팔로우 확인」 버튼 → 팔로우 여부 확인 → 자료·링크 전송). 링크는 캡션이 아니라 DM으로 보낸다. 설정은 ManyChat 등 Meta 공식 API 도구에서 하고 마지막 「켜기·게시」는 사람이 누른다.",
+          "tools": "Read, Write, browser-operator 위임",
+          "forbidden": "비공식 봇·비밀번호 로그인, 팔로우만 한 사람에게 먼저 DM, 무한 재확인, 켜기·게시 버튼 누르기"
+        },
+        {
+          "name": "insta-skills",
+          "title": "인스타 스킬 13종",
+          "state": "planned",
+          "role": "instagram-agent-skill(MIT, 키·로그인 없음) 13개 스킬을 우리 규칙에 맞춰 쓴다 — 지난 게시물 분석(ig-audit), 캡션 점검(ig-caption), 프로필 점수(ig-profile), 주간 계획(ig-plan→캘린더), 레퍼런스 릴스 순위(ig-viral, 사람이 모은 자료로만), 답글·스토리·재활용 초안. 글만 쓰고 게시·댓글·팔로우·DM은 사람이 한다.",
+          "tools": "Skill(ig-*), Read, Write",
+          "forbidden": "인스타 로그인·자동 게시·자동 댓글·자동 팔로우, 에이전트가 인스타 화면 수집, 우리 후킹 규칙보다 스킬 기본값 우선"
         }
       ],
       "flow": [
@@ -95,6 +111,11 @@
           "step": "예약·소개 댓글",
           "who": "사람",
           "kind": "human"
+        },
+        {
+          "step": "댓글→DM 자동 응답 설정",
+          "who": "dm-funnel",
+          "kind": "agent"
         }
       ],
       "status_step": {
@@ -145,6 +166,22 @@
           "role": "브라우저로 각 플랫폼 업로드 화면을 채운다. 카카오는 임시저장까지(시리즈명 필수), LINE 약관 동의·Release는 허용됨.",
           "tools": "browser-operator 위임",
           "forbidden": "카카오 제출, 결제, 삭제"
+        },
+        {
+          "name": "ads-auditor",
+          "title": "광고 점검",
+          "state": "planned",
+          "role": "claude-ads(MIT) 스킬로 메타·구글·틱톡 광고를 사람이 내보낸 CSV·캡처로 점검해 새는 광고비·잘 되는 소재·다음 계획을 정리한다. 광고를 켜거나 예산을 바꾸지 않는다.",
+          "tools": "Skill(ads), Read, Write",
+          "forbidden": "광고 켜기·예산 변경·결제, 광고 계정 로그인"
+        },
+        {
+          "name": "seo-check",
+          "title": "검색 노출 점검",
+          "state": "planned",
+          "role": "Open SEO(MIT)로 판매 페이지·블로그의 키워드·순위·사이트 점검을 한다. DataForSEO 유료 API 키가 필요하고 네이버 데이터는 없다(구글 기준).",
+          "tools": "Open SEO MCP, Read, Write",
+          "forbidden": "결제·요금제 변경, 사이트 글 자동 수정"
         }
       ],
       "flow": [
@@ -384,7 +421,7 @@
           "name": "code-reviewer",
           "title": "코드 리뷰",
           "state": "planned",
-          "role": "변경 범위가 요청을 벗어났는지, 보안(키 노출·인젝션)·비용(Bedrock 호출)을 읽기 전용으로 점검한다.",
+          "role": "변경 범위가 요청을 벗어났는지, 보안(키 노출·인젝션)·비용(Bedrock 호출)을 읽기 전용으로 점검한다. 보안 점검 목록은 cloudflare security-audit-skill 기준(입력값 검증·비밀 키 노출·권한 설정·의존성 취약점). 고칠 때는 ponytail 원칙 — 한 줄로 고칠 수 있으면 한 줄, 요청 밖 코드는 건드리지 않음.",
           "tools": "Read, Grep, Glob",
           "forbidden": "파일 수정"
         },
@@ -395,6 +432,30 @@
           "role": "모든 그룹 공통. 실행·승인·반려·특이사항을 docs/work-log.md(저장소별 docs/work-log.md)에 남긴다.",
           "tools": "Write(로그 파일만)",
           "forbidden": "-"
+        },
+        {
+          "name": "geo-viewer",
+          "title": "공간 정보 보기",
+          "state": "planned",
+          "role": "God's Eye View(오픈소스 3D 지구본·위성 자료)로 물류 거점·현장 위치를 지도 위에 보여 주는 참고 화면을 만든다(물류 디지털 트윈 기획 참고용).",
+          "tools": "웹앱, Read",
+          "forbidden": "개인 위치 추적, 특정인 주소 조회"
+        },
+        {
+          "name": "ml-intern",
+          "title": "ML 인턴",
+          "state": "planned",
+          "role": "ml-intern(Hugging Face)처럼 논문·문서·데이터셋을 읽고 작은 실험 코드를 짠다(물류 예측·디지털 트윈 연구용).",
+          "tools": "Read, Write, Bash(시험 코드만)",
+          "forbidden": "유료 클라우드 GPU 실행(사람 승인 없이), 사내 데이터 외부 업로드, 커밋"
+        },
+        {
+          "name": "app-research",
+          "title": "경쟁 앱 조사",
+          "state": "planned",
+          "role": "replica-skill 의 「Entrepreneur」 방식만: 경쟁 앱의 공개 리뷰에서 사용자가 싫어하는 점을 모아 내 앱(말랑팡·한국사 게임·내 차 찾기)에서 고칠 목록을 만든다.",
+          "tools": "WebSearch, Read, Write",
+          "forbidden": "남의 앱 코드·디자인·상표·문구 복제, 역설계, 「복제해서 팔기」"
         }
       ],
       "flow": [
@@ -449,6 +510,54 @@
           "role": "PhotoCraft·PdfCraft(오픈소스, 얼리 알파) CLI·MCP로 규격 맞춤·형식 변환·일괄 보정·PSD 내보내기·PDF 합치기를 한다. 새 그림 생성은 하지 않는다(Firefly).",
           "tools": "Bash(photocraft-cli·pdfcraft-cli), Read, Write",
           "forbidden": "원본 덮어쓰기, 그림 생성, ArtCraft 상표 사용"
+        },
+        {
+          "name": "media-studio",
+          "title": "AI 미디어 스튜디오",
+          "state": "planned",
+          "role": "Open Generative AI(MIT, muapi) 앱·muapi-cli로 립싱크(사진·영상+음성), 시네마 카메라 값(렌즈·조리개) 시안, 로컬 엔진(sd.cpp·Wan2GP) 비교 시안을 만든다. 그림 생성 기본은 Firefly, 영상 생성 기본은 Kling 그대로.",
+          "tools": "Bash(muapi만), Read, Write",
+          "forbidden": "키 다루기, 실존 인물 얼굴 립싱크, 원본 덮어쓰기, 결제·크레딧 구매, Firefly·Kling 대체"
+        },
+        {
+          "name": "voice-studio",
+          "title": "음성 스튜디오",
+          "state": "planned",
+          "role": "VoiceStudio(AGPL-3.0, 내 PC 안에서만)로 참고 영상 받아쓰기(자막·대본 뽑기), 웹소설 회차 오디오북 시안, 릴스 더빙 시안을 만든다. 릴스 기본 음성(본계정 SunHi, top.pick03 Chirp3-HD)은 그대로.",
+          "tools": "VoiceStudio 로컬 API·MCP, Read, Write",
+          "forbidden": "남의 목소리 복제(본인 허락 없는 목소리, 실존 인물·지도자), Agent Hub 에 코드 섞기(AGPL)"
+        },
+        {
+          "name": "lesson-maker",
+          "title": "강의·학습 자료",
+          "state": "planned",
+          "role": "OpenMAIC(MIT)로 주제·자료를 넣어 슬라이드(PPTX)·퀴즈·인터랙티브 수업을 만든다 — 자동화 가이드북 강의, 한국사 게임 한능검 학습 콘텐츠 시안. 교재·논문을 올려 질문 답변·퀴즈·개념 시각화를 하는 과외형 학습은 DeepTutor(Apache-2.0)로.",
+          "tools": "OpenMAIC·DeepTutor(웹앱), Read, Write",
+          "forbidden": "미공개 원고를 외부 모델로 보내기(모델은 hub/models.py 등급 규칙)"
+        },
+        {
+          "name": "desktop-operator",
+          "title": "격리 PC 조작",
+          "state": "planned",
+          "role": "데스크톱 앱 작업을 한다. 기본 도구는 agent-desktop(Vercel Labs, npm, 실험 단계): 화면 캡처를 짐작하는 대신 운영체제 접근성 트리로 버튼·입력칸을 읽고(필요한 부분만 → 토큰 절약) 번호(ref)로 누른다. 뒤에서(백그라운드) 돌아 사람이 계속 일할 수 있다. 쓰는 곳: 내 앱 시험(말랑팡·내 차 찾기 PC판), 반복 입력. 위험한 작업은 cua 격리 PC에서.",
+          "tools": "agent-desktop(snapshot·click·type), cua 샌드박스, Read, Write",
+          "forbidden": "게시·제출·결제·삭제·보내기 버튼(크롬 통제와 같은 금지어), 수익 계정 앱(인스타·카카오톡·LINE) 조작, 여러 에이전트 동시 조작으로 사람 작업 방해, 비밀번호 입력"
+        },
+        {
+          "name": "explainer-visual",
+          "title": "설명 입체 도해",
+          "state": "planned",
+          "role": "anatomy 스킬(MIT)처럼 원리를 마우스를 올리면 부품이 분리되는 입체 도해(HTML·SVG)로 만든다 — 가이드북 설명 그림, 릴스 설명 장면, 사내 시스템 구조도.",
+          "tools": "Skill(anatomy), Read, Write",
+          "forbidden": "남의 상표·캐릭터 그리기, 사진 같은 그림 생성(그림은 Firefly)"
+        },
+        {
+          "name": "design-critic",
+          "title": "디자인 검수",
+          "state": "planned",
+          "role": "impeccable·taste-skill 기준으로 「AI 티 나는 디자인」(뻔한 보라 그라데이션, 같은 카드 반복, 의미 없는 아이콘)을 찾아 고칠 곳을 표시한다 — 관리 화면, 카드뉴스, 릴스 표지, 판매 페이지.",
+          "tools": "Read, Skill(impeccable·taste-skill)",
+          "forbidden": "직접 수정, 정해진 양식(카드뉴스 사진 위주·표지 제목 대비) 바꾸기"
         }
       ],
       "flow": [
@@ -464,6 +573,99 @@
         },
         {
           "step": "최종 버튼",
+          "who": "사람",
+          "kind": "human"
+        }
+      ]
+    },
+    {
+      "id": "invest",
+      "title": "투자 연구 그룹(보류)",
+      "lead": "backtest-researcher",
+      "purpose": "백테스트·분석 보고서만 만든다. 주문·매매는 하지 않는다. 결과는 투자 조언이 아니다.",
+      "agents": [
+        {
+          "name": "backtest-researcher",
+          "title": "백테스트 연구",
+          "state": "planned",
+          "role": "Vibe-Trading(MIT, 1.0 이전 판)으로 전략을 과거 데이터로 시험하고 보고서만 쓴다. 실거래(Live Trading) 기능은 끈다.",
+          "tools": "Vibe-Trading(백테스트만), Read, Write",
+          "forbidden": "실거래·주문·이체, 거래소 키 다루기, 수익 보장 표현"
+        },
+        {
+          "name": "market-scanner",
+          "title": "시장 스캐너",
+          "state": "planned",
+          "role": "여러 종목 가격·거래량을 훑어 후보를 고른다(과거·공개 데이터). 실거래 없음(백테스트·모의 매매만).",
+          "tools": "Vibe-Trading(백테스트), Read, Write",
+          "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+        },
+        {
+          "name": "position-sizer",
+          "title": "비중 계산",
+          "state": "planned",
+          "role": "후보마다 얼마를 넣을지 계산한다(모의 계좌 기준). 실거래 없음(백테스트·모의 매매만).",
+          "tools": "Vibe-Trading(백테스트), Read, Write",
+          "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+        },
+        {
+          "name": "entry-planner",
+          "title": "진입 계획",
+          "state": "planned",
+          "role": "언제 사고팔지 규칙을 정하고 백테스트로 시험한다. 실거래 없음(백테스트·모의 매매만).",
+          "tools": "Vibe-Trading(백테스트), Read, Write",
+          "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+        },
+        {
+          "name": "risk-guard",
+          "title": "리스크 가드",
+          "state": "planned",
+          "role": "한도를 넘는 비중·무리한 매매를 막고 이유를 남긴다. 실거래 없음(백테스트·모의 매매만).",
+          "tools": "Vibe-Trading(백테스트), Read, Write",
+          "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+        },
+        {
+          "name": "market-terminal",
+          "title": "시장 자료 보기",
+          "state": "planned",
+          "role": "FinceptTerminal(AGPL-3.0, 따로 설치)로 시세·뉴스·포트폴리오 자료를 보고 백테스트 팀에 넘길 요약을 쓴다.",
+          "tools": "FinceptTerminal(별도 앱), Read, Write",
+          "forbidden": "알고리즘 실거래, Agent Hub 에 코드 섞기(AGPL), 투자 권유 표현"
+        }
+      ],
+      "flow": [
+        {
+          "step": "전략 설명",
+          "who": "사람",
+          "kind": "human"
+        },
+        {
+          "step": "시장 훑기",
+          "who": "market-scanner",
+          "kind": "agent"
+        },
+        {
+          "step": "비중 계산",
+          "who": "position-sizer",
+          "kind": "agent"
+        },
+        {
+          "step": "진입 규칙",
+          "who": "entry-planner",
+          "kind": "agent"
+        },
+        {
+          "step": "리스크 점검",
+          "who": "risk-guard",
+          "kind": "agent"
+        },
+        {
+          "step": "백테스트",
+          "who": "backtest-researcher",
+          "kind": "agent"
+        },
+        {
+          "step": "보고서 확인",
           "who": "사람",
           "kind": "human"
         }

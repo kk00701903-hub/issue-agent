@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Agent Hub</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="내 PC에 AI 직원 사무실을 차리는 Agent Hub. 도구를 고르고 에이전트를 연결하면 릴스·웹소설·굿즈 일을 나눠 하고, 마지막 버튼은 사람이 누릅니다.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 레이아웃: 사무실 그림을 펼친 첫 화면 → 일하는 순서 4단계 → 도구 6종 → 안전장치 → 요금 → 묻고 답하기. 나뭇결 바닥색(앰버)을 강조색, 칸막이 청회색을 보조색으로. */
+:root {
+  --bg: #F3F5F8; --surface: #FFFFFF; --ink: #16233A; --sub: #5A6982; --line: #D9DFE8;
+  --navy: #0B3A9E; --navy-ink: #FFFFFF; --amber: #B8691F; --amber-soft: #F6E3CC; --slate: #8FA3B8; --slate-soft: #E3E9F1;
+  --ok: #1F845A; --warn: #A54800;
+  --display: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11161F; --surface: #19202B; --ink: #E4E9F1; --sub: #9AA7BA; --line: #2B3545;
+  --navy: #7EA6FF; --navy-ink: #0B1220; --amber: #F0A65E; --amber-soft: #3A2A1A; --slate: #6F829A; --slate-soft: #222C3A; --ok: #4BCE97; --warn: #F5CD47; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #11161F; --surface: #19202B; --ink: #E4E9F1; --sub: #9AA7BA; --line: #2B3545;
+  --navy: #7EA6FF; --navy-ink: #0B1220; --amber: #F0A65E; --amber-soft: #3A2A1A; --slate: #6F829A; --slate-soft: #222C3A; --ok: #4BCE97; --warn: #F5CD47; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.7 var(--body); margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--navy); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+h2 { font-size: clamp(26px, 3.4vw, 36px); line-height: 1.25; }
+h3 { font-size: 18px; line-height: 1.4; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+.lead { color: var(--sub); font-size: 17px; max-width: 62ch; }
+nav.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.brand i { width: 30px; height: 30px; border-radius: 7px; background: var(--navy); color: var(--navy-ink); display: grid; place-items: center; font: 700 12px var(--mono); font-style: normal; }
+.navlinks { display: flex; gap: 20px; align-items: center; font-size: 14px; }
+.navlinks a { color: var(--sub); text-decoration: none; } .navlinks a:hover { color: var(--ink); }
+@media (max-width: 640px) { .navlinks .hide-s { display: none; } }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 20px; border-radius: 8px; font: 700 15px var(--body); text-decoration: none; border: 1px solid transparent; cursor: pointer; }
+.btn.primary { background: var(--navy); color: var(--navy-ink); }
+.btn.ghost { border-color: var(--line); color: var(--ink); background: var(--surface); }
+.btn.sm { height: 36px; padding: 0 14px; font-size: 14px; }
+
+/* 첫 화면 */
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: center; padding-block: 28px 56px; }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 28px; } }
+.hero h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.15; margin: 14px 0 18px; }
+.hero h1 em { font-style: normal; color: var(--amber); }
+.hero .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+.hero .fine { margin-top: 14px; font-size: 13px; color: var(--sub); }
+.office { position: relative; aspect-ratio: 960 / 752; max-width: 100%; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 24px 60px -30px rgba(22,35,58,.45); }
+.office img { width: 100%; height: 100%; display: block; }
+.tag { position: absolute; transform: translate(-50%, -100%); background: rgba(255,255,255,.95); color: #16233A; border-radius: 7px; padding: 4px 9px 5px; font-size: 12px; line-height: 1.3;
+  box-shadow: 0 2px 6px rgba(22,35,58,.22); border-top: 3px solid var(--c); white-space: nowrap; display: flex; flex-direction: column; align-items: center; }
+.tag b { font-weight: 700; } .tag span { color: var(--c); font-size: 11px; filter: brightness(.82); }
+.tag .q { position: absolute; top: -20px; width: 18px; height: 18px; border-radius: 50%; background: var(--c); color: #16233A; font: 800 12px/18px var(--body); text-align: center; }
+@media (prefers-reduced-motion: no-preference) { .tag .q { animation: bob 1.2s ease-in-out infinite; } }
+@keyframes bob { 50% { transform: translateY(-4px); } }
+@media (max-width: 480px) { .tag { font-size: 10px; padding: 3px 6px; } .tag span { display: none; } }
+.office .stamp { position: absolute; right: 12px; bottom: 12px; font: 500 11px var(--mono); color: #5A6982; background: rgba(255,255,255,.9); padding: 3px 8px; border-radius: 4px; }
+
+section { padding-block: 64px; }
+.sec-head { display: grid; gap: 12px; margin-bottom: 32px; }
+
+/* 일하는 순서: 실제 순서라서 번호를 씀 */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+@media (max-width: 860px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .flow { grid-template-columns: 1fr; } }
+.step { padding: 24px; display: grid; gap: 10px; align-content: start; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.step .n { font: 500 13px var(--mono); color: var(--sub); }
+.step.human { background: var(--amber-soft); }
+.step.human .n { color: var(--amber); }
+.step p { color: var(--sub); font-size: 15px; }
+.cmd { font: 500 12px/1.6 var(--mono); background: var(--slate-soft); color: var(--ink); padding: 8px 10px; border-radius: 6px; overflow-x: auto; white-space: nowrap; }
+
+/* 도구 */
+.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.tools .tool:first-child { grid-column: span 2; }
+@media (max-width: 900px) { .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .tools { grid-template-columns: 1fr; } .tools .tool:first-child { grid-column: auto; } }
+.tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.tool .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tool .who { font: 500 12px var(--mono); color: var(--sub); }
+.tool p { color: var(--sub); font-size: 15px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--slate-soft); color: var(--ink); }
+.badge { font: 500 11px var(--mono); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--sub); }
+
+/* 안전장치 */
+.guard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 860px) { .guard { grid-template-columns: 1fr; } }
+.rules { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.rule { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; padding-block: 16px; border-bottom: 1px solid var(--line); }
+@media (max-width: 480px) { .rule { grid-template-columns: 1fr; gap: 4px; } }
+.rule dt { font: 500 13px var(--mono); color: var(--amber); }
+.rule dd { margin: 0; color: var(--ink); font-size: 15px; }
+.blocked { font: 500 13px/1.9 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; overflow-x: auto; }
+.blocked .x { color: var(--warn); } .blocked .o { color: var(--ok); }
+
+/* 요금 */
+.plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
+.plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; display: grid; gap: 14px; align-content: start; }
+.plan.feat { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy); }
+.plan .price { font: 700 34px/1 var(--display); font-variant-numeric: tabular-nums; }
+.plan .price small { font: 400 14px var(--body); color: var(--sub); }
+.plan ul { margin: 0; padding-left: 18px; color: var(--sub); font-size: 15px; display: grid; gap: 4px; }
+.plan .for { font-size: 13px; color: var(--sub); }
+.tbl-h { margin: 40px 0 12px; font: 700 20px var(--display); }
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.price-tbl { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; min-width: 640px; }
+.price-tbl th, .price-tbl td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.price-tbl th:first-child, .price-tbl td:first-child { text-align: left; }
+.price-tbl thead th { font-size: 13px; color: var(--sub); font-weight: 600; background: rgba(0,0,0,.02); }
+.price-tbl tr:last-child td { border-bottom: 0; }
+.price-tbl .save { color: #1F845A; font-weight: 600; }
+.price-tbl .best { background: rgba(12,102,228,.06); }
+.price-tbl td.l, .price-tbl th.l { text-align: left; white-space: normal; }
+.vat { margin-top: 14px; font-size: 13px; color: var(--sub); }
+
+/* 묻고 답하기 */
+.faq { display: grid; gap: 0; border-top: 1px solid var(--line); max-width: 820px; }
+.faq details { border-bottom: 1px solid var(--line); padding-block: 16px; }
+.faq summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::after { content: "+"; font: 500 18px var(--mono); color: var(--sub); }
+.faq details[open] summary::after { content: "−"; }
+.faq p { color: var(--sub); margin-top: 10px; max-width: 70ch; }
+
+footer { border-top: 1px solid var(--line); padding-block: 28px 40px; color: var(--sub); font-size: 13px; }
+footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.band { background: var(--surface); border-block: 1px solid var(--line); }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="top" aria-label="주 메뉴">
+    <a class="brand" href="#"><i>AH</i>Agent Hub</a>
+    <div class="navlinks"><a class="hide-s" href="#tools">도구</a><a class="hide-s" href="#safety">안전장치</a><a href="#pricing">요금</a><a class="btn sm ghost" href="/app">로그인</a></div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <div class="eyebrow">AI 직원 사무실 · 내 PC에서</div>
+      <h1>일은 AI 직원이,<br><em>마지막 버튼</em>은 내가.</h1>
+      <p class="lead">릴스·크몽 판매·웹소설·이모티콘처럼 매일 반복되는 일을 도구로 묶었습니다. 도구를 고르고 에이전트를 연결하면 팀장과 팀원이 나눠 일하고, 결과는 승인함에 올라옵니다. 게시·제출·결제는 사람이 누를 때까지 막혀 있습니다.</p>
+      <div class="cta"><a class="btn primary" href="/app#signup">14일 무료로 시작</a><a class="btn ghost" href="#pricing">요금 보기</a></div>
+      <p class="fine">카드 등록 없이 시작 · 모든 도구 사용 · Windows PC</p>
+    </div>
+    <figure class="office" style="margin:0" aria-label="모니터 화면 예시: 사무실에 앉은 에이전트들이 각자 일하는 모습">
+      <img src="/static/office.jpg" alt="모니터 화면: 사무실에서 에이전트들이 각자 자리에서 일하고, 이름표에 지금 하는 일이 보인다" width="960" height="752">
+
+
+
+
+      <div class="stamp">모니터 화면 예시 · 실제 기록대로 움직임</div>
+    </figure>
+  </header>
+</div>
+
+<section class="band" aria-labelledby="h-flow">
+  <div class="wrap">
+    <div class="sec-head"><div class="eyebrow">일하는 순서</div><h2 id="h-flow">네 단계 중 마지막 하나만 사람이 합니다</h2></div>
+    <div class="flow">
+      <div class="step"><div class="n">1 · 도구 고르기</div><h3>할 일의 묶음을 켭니다</h3><p>인스타그램 도구를 켜면 후킹 26패턴, 장면 속도·캡션 검수기, 계정별 규칙이 같이 켜집니다.</p></div>
+      <div class="step"><div class="n">2 · 에이전트 연결</div><h3>일할 직원을 붙입니다</h3><p>트렌드 조사, 릴스 제작, 의견 검수처럼 도구에 연결한 에이전트만 그 일을 맡습니다.</p></div>
+      <div class="step"><div class="n">3 · 맡기기</div><h3>주제 하나만 넣습니다</h3><p class="cmd">python -m hub.runner --tool instagram --topic "계약 전 확인 3가지"</p></div>
+      <div class="step human"><div class="n">4 · 승인 · 사람</div><h3>보고 승인합니다</h3><p>검수를 통과한 결과만 승인함에 옵니다. 게시·예약은 인스타그램 앱에서 직접 합니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="tools" aria-labelledby="h-tools">
+  <div class="wrap">
+    <div class="sec-head"><div class="eyebrow">도구 7종 + 공용 에이전트</div><h2 id="h-tools">필요한 도구만 골라 씁니다</h2><p class="lead">도구마다 팀이 따로 있습니다. 브라우저 조작·웹 읽기·그림 일괄 처리 같은 공용 에이전트는 어느 요금제에나 들어 있어 아무 도구에나 연결합니다.</p></div>
+    <div class="tools">
+      <article class="tool"><div class="head"><h3>인스타그램 릴스·카드뉴스</h3><span class="who">8명</span></div><p>주제를 넣으면 후킹·장면·대본·캡션·소개 댓글까지 든 패키지를 만들고 규칙을 코드로 검수합니다.</p><div class="chips"><span class="chip">후킹 26패턴</span><span class="chip">장면 속도 검수</span><span class="chip">음성·무음 계정</span><span class="chip">월간 캘린더</span></div></article>
+      <article class="tool"><div class="head"><h3>크몽 전문가 서비스</h3><span class="who">5명</span></div><p>서비스 제목·요약·상세 설명·3단 패키지·FAQ를 만들고 크몽 등록 규칙을 코드로 검수합니다. 등록 화면은 임시저장까지만 채웁니다.</p><div class="chips"><span class="chip">외부 연락처 검사</span><span class="chip">패키지 가격 차이</span><span class="chip">검수 요청은 사람이</span></div></article>
+      <article class="tool"><div class="head"><h3>웹소설 연재</h3><span class="who">6명</span></div><p>회차 설계, 집필, 문체·AI 티 검수, 퇴고, 연재처 업로드 준비까지 작품 표준 폴더 순서대로 돌립니다.</p><div class="chips"><span class="chip">표준문체</span><span class="chip">AI 티 검수</span><span class="chip">업로드 표준</span></div></article>
+      <article class="tool"><div class="head"><h3>이모티콘·굿즈</h3><span class="who">6명</span></div><p>세트를 기획하고 AI 그림을 불량 7항목으로 걸러 판매처별 규격과 업로드 화면까지 준비합니다.</p><div class="chips"><span class="chip">24·32종 기획</span><span class="chip">불량 7항목</span><span class="chip">판매처 분기</span></div></article>
+      <article class="tool"><div class="head"><h3>사내 개발</h3><span class="who">5명</span></div><p>요구사항·화면 설계 문서, 구현 보조, 보안·비용 코드 리뷰. 커밋과 푸시는 사람이 합니다.</p><div class="chips"><span class="chip">설계 문서</span><span class="chip">읽기 전용 리뷰</span></div></article>
+      <article class="tool"><div class="head"><h3>게임 개발</h3><span class="who">5명</span></div><p>컷씬 대본, 캐릭터를 고정한 그림 프롬프트, 코드 수정, 스토어 등록 화면 채우기.</p><div class="chips"><span class="chip">컷씬 스타일 가이드</span><span class="chip">출시 준비</span></div></article>
+      <article class="tool"><div class="head"><h3>투자 연구</h3><span class="badge">베타</span></div><p>전략을 과거 데이터로 백테스트하고 보고서만 씁니다. 주문·이체 기능은 없습니다. 투자 조언이 아닙니다.</p><div class="chips"><span class="chip">백테스트</span><span class="chip">실거래 없음</span></div></article>
+    </div>
+  </div>
+</section>
+
+<section id="safety" class="band" aria-labelledby="h-safe">
+  <div class="wrap guard">
+    <div class="sec-head" style="margin:0"><div class="eyebrow">안전장치</div><h2 id="h-safe">계정이 막히지 않게, 돈이 새지 않게</h2>
+      <p class="lead">수익이 나는 계정은 한 번 막히면 되돌리기 어렵습니다. Agent Hub는 처음부터 사람이 마지막을 누르도록 만들었습니다.</p>
+      <dl class="rules" style="margin-top:20px">
+        <div class="rule"><dt>최종 버튼</dt><dd>게시·공유·제출·결제·삭제 버튼은 훅이 막습니다. 에이전트는 그 직전 화면에서 멈추고 보고합니다.</dd></div>
+        <div class="rule"><dt>내 PC에서</dt><dd>원고·패키지·파일은 고객 PC에만 있습니다. 웹 콘솔은 상태 개수만 받습니다.</dd></div>
+        <div class="rule"><dt>하루 한도</dt><dd>전체 예산과 에이전트별 한도를 넘으면 실행이 멈춥니다.</dd></div>
+        <div class="rule"><dt>원고 보호</dt><dd>비공개 원고·사내 자료는 외부 무료 모델로 보내지 않고 정한 모델만 씁니다.</dd></div>
+      </dl>
+    </div>
+    <div class="blocked" role="img" aria-label="훅이 막는 명령과 허용하는 명령 예시">
+      <div class="x">✖ 막음&nbsp; browser_click "게시"</div>
+      <div class="x">✖ 막음&nbsp; agent-desktop click "보내기"</div>
+      <div class="x">✖ 막음&nbsp; agent-desktop snapshot --app Instagram</div>
+      <div class="x">✖ 막음&nbsp; git push</div>
+      <div class="o">✔ 허용&nbsp; browser_click "임시저장"</div>
+      <div class="o">✔ 허용&nbsp; 캡션·소개 댓글 복사</div>
+      <div class="o">✔ 허용&nbsp; 승인함에 결과 올리기</div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing" aria-labelledby="h-price">
+  <div class="wrap">
+    <div class="sec-head"><div class="eyebrow">요금</div><h2 id="h-price">14일은 모든 도구를 무료로</h2><p class="lead">평가판이 끝나기 전에 요금제를 고르면 그대로 이어 씁니다. AI 사용료(API)는 고객님 키로 따로 나갑니다.</p></div>
+    <div class="plans">
+      <div class="plan"><h3>스타터</h3><div class="price">29,000원<small> / 월</small></div><div class="for">1인 크리에이터</div><ul><li>도구 1개 + 공용 에이전트</li><li>PC 1대</li><li>승인함·캘린더·모니터</li></ul><a class="btn ghost" href="/app#signup">무료로 시작</a></div>
+      <div class="plan feat"><h3>프로</h3><div class="price">79,000원<small> / 월</small></div><div class="for">여러 채널을 굴리는 부업·소상공인</div><ul><li>도구 3개 + 공용 에이전트</li><li>PC 2대</li><li>에이전트별 하루 한도</li></ul><a class="btn primary" href="/app#signup">무료로 시작</a></div>
+      <div class="plan"><h3>팀</h3><div class="price">199,000원<small> / 월</small></div><div class="for">작은 팀·에이전시</div><ul><li>모든 도구(베타 포함)</li><li>PC 5대</li><li>오프라인 PC용 토큰</li></ul><a class="btn ghost" href="/app#signup">무료로 시작</a></div>
+    </div>
+    <p class="vat">부가세 별도. 가격은 출시 전 확정 예정입니다.</p>
+    <h3 class="tbl-h" id="annual">결제 기간별 사용료</h3>
+    <div class="tbl-wrap"><table class="price-tbl"><thead><tr><th>요금제</th><th>월간</th><th>6개월 선결제 · 10% 할인</th><th>연간 · 20% 할인</th><th>연간 결제 시 월 환산</th><th>연간 절약</th></tr></thead><tbody><tr><td><b>스타터</b></td><td>29,000원</td><td>156,600원<br><small>26,100원 / 월</small></td><td class="best">278,400원<br><small>23,200원 / 월</small></td><td>23,200원</td><td class="save">69,600원</td></tr><tr><td><b>프로</b></td><td>79,000원</td><td>426,600원<br><small>71,100원 / 월</small></td><td class="best">758,400원<br><small>63,200원 / 월</small></td><td>63,200원</td><td class="save">189,600원</td></tr><tr><td><b>팀</b></td><td>199,000원</td><td>1,074,600원<br><small>179,100원 / 월</small></td><td class="best">1,910,400원<br><small>159,200원 / 월</small></td><td>159,200원</td><td class="save">477,600원</td></tr></tbody></table></div>
+    <h3 class="tbl-h" id="discount">할인 기준</h3>
+    <div class="tbl-wrap"><table class="price-tbl"><thead><tr><th>할인</th><th>할인율</th><th class="l">기준</th><th class="l">확인 방법</th></tr></thead><tbody><tr><td><b>6개월 선결제</b></td><td>10%</td><td class="l">6개월 한 번에 결제</td><td class="l">자동 적용</td></tr><tr><td><b>연간</b></td><td>20%</td><td class="l">12개월 한 번에 결제</td><td class="l">자동 적용</td></tr><tr><td><b>출시 기념(조기 가입)</b></td><td>+10%</td><td class="l">정식 출시 후 90일 안에 연간 결제한 고객, 첫 1년만</td><td class="l">결제일</td></tr><tr><td><b>연간 재계약</b></td><td>+5%</td><td class="l">연간 요금제를 끊김 없이 다시 1년 결제</td><td class="l">이전 결제 기록</td></tr><tr><td><b>학생·교육·비영리</b></td><td>+15%</td><td class="l">학생, 학교·교육기관, 비영리 단체</td><td class="l">재학·재직 증명 또는 고유번호증</td></tr><tr><td><b>1인 창업·소상공인</b></td><td>+10%</td><td class="l">사업자등록 3년 이내 개인사업자·소상공인</td><td class="l">사업자등록증</td></tr><tr><td><b>여러 좌석</b></td><td>+10%</td><td class="l">한 회사가 팀 요금제 2개 이상(PC 10대 이상)</td><td class="l">주문 내역</td></tr></tbody></table></div>
+    <p class="vat">기간 할인은 결제할 때 자동으로 적용됩니다. 추가 할인은 증빙을 확인한 뒤 적용하고, 여러 개를 함께 받을 수 있지만 기간 할인을 포함해 모두 합쳐 35%까지입니다. 추가 할인은 정가에 각 할인율을 더해 계산합니다.</p>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="h-faq">
+  <div class="wrap">
+    <div class="sec-head"><div class="eyebrow">묻고 답하기</div><h2 id="h-faq">자주 묻는 것</h2></div>
+    <div class="faq">
+      <details><summary>인스타그램에 자동으로 올려 주나요?</summary><p>아니요. 자동 게시·자동 댓글·자동 팔로우·DM 자동 발송은 하지 않습니다. 이런 자동화는 계정이 막히는 지름길이라 일부러 뺐습니다. 승인한 결과의 캡션과 소개 댓글을 복사하고, 인스타그램 앱의 콘텐츠 예약으로 직접 올립니다.</p></details>
+      <details><summary>AI 사용료는 따로 드나요?</summary><p>네. 에이전트는 고객님 PC에서 고객님의 Claude API 키로 돕니다. 하루 한도를 정해 두면 그 이상은 쓰지 않습니다. 시험 실행(드라이런)은 비용이 들지 않습니다.</p></details>
+      <details><summary>제 원고나 자료가 서버로 가나요?</summary><p>아니요. 원고·패키지·파일은 PC에만 남습니다. 웹 콘솔은 요금제 확인을 위해 실행 건수 같은 개수만 받습니다.</p></details>
+      <details><summary>인터넷이 끊기면 멈추나요?</summary><p>이용권은 PC에 저장돼 있어 기간 안에는 그대로 돕니다. 기간이 지나도 7일 유예가 있고, 인터넷이 안 되는 PC는 오프라인 토큰을 받아 넣을 수 있습니다.</p></details>
+      <details><summary>Mac에서도 되나요?</summary><p>지금은 Windows PC 기준으로 설치 안내를 드립니다. Python이 돌아가는 PC면 실행은 되지만, 설치 파일과 안내는 Windows부터 냅니다.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <div><b>Agent Hub</b> · 상호·대표자·사업자등록번호·통신판매업 신고번호는 출시 전에 넣습니다.</div>
+    <div><a href="/static/terms.html">이용약관</a> · <a href="/static/privacy.html">개인정보 처리방침</a></div>
+  </div>
+</footer>
+
+</body>
+</html>

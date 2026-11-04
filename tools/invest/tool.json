@@ -1,0 +1,161 @@
+{
+  "id": "invest",
+  "name": "투자 연구(베타)",
+  "category": "연구",
+  "icon": "📈",
+  "team": {
+    "id": "invest",
+    "title": "투자 연구 팀(베타)",
+    "lead": "backtest-researcher",
+    "purpose": "백테스트·분석 보고서만 만든다. 주문·매매는 하지 않는다. 결과는 투자 조언이 아니다.",
+    "flow": [
+      {
+        "step": "전략 설명",
+        "who": "사람",
+        "kind": "human"
+      },
+      {
+        "step": "시장 훑기",
+        "who": "market-scanner",
+        "kind": "agent"
+      },
+      {
+        "step": "비중 계산",
+        "who": "position-sizer",
+        "kind": "agent"
+      },
+      {
+        "step": "진입 규칙",
+        "who": "entry-planner",
+        "kind": "agent"
+      },
+      {
+        "step": "리스크 점검",
+        "who": "risk-guard",
+        "kind": "agent"
+      },
+      {
+        "step": "백테스트",
+        "who": "backtest-researcher",
+        "kind": "agent"
+      },
+      {
+        "step": "보고서 확인",
+        "who": "사람",
+        "kind": "human"
+      }
+    ],
+    "agents": [
+      {
+        "name": "backtest-researcher",
+        "title": "백테스트 연구",
+        "state": "planned",
+        "role": "Vibe-Trading(MIT, 1.0 이전 판)으로 전략을 과거 데이터로 시험하고 보고서만 쓴다. 실거래(Live Trading) 기능은 끈다.",
+        "tools": "Vibe-Trading(백테스트만), Read, Write",
+        "forbidden": "실거래·주문·이체, 거래소 키 다루기, 수익 보장 표현"
+      },
+      {
+        "name": "market-scanner",
+        "title": "시장 스캐너",
+        "state": "planned",
+        "role": "여러 종목 가격·거래량을 훑어 후보를 고른다(과거·공개 데이터). 실거래 없음(백테스트·모의 매매만).",
+        "tools": "Vibe-Trading(백테스트), Read, Write",
+        "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+      },
+      {
+        "name": "position-sizer",
+        "title": "비중 계산",
+        "state": "planned",
+        "role": "후보마다 얼마를 넣을지 계산한다(모의 계좌 기준). 실거래 없음(백테스트·모의 매매만).",
+        "tools": "Vibe-Trading(백테스트), Read, Write",
+        "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+      },
+      {
+        "name": "entry-planner",
+        "title": "진입 계획",
+        "state": "planned",
+        "role": "언제 사고팔지 규칙을 정하고 백테스트로 시험한다. 실거래 없음(백테스트·모의 매매만).",
+        "tools": "Vibe-Trading(백테스트), Read, Write",
+        "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+      },
+      {
+        "name": "risk-guard",
+        "title": "리스크 가드",
+        "state": "planned",
+        "role": "한도를 넘는 비중·무리한 매매를 막고 이유를 남긴다. 실거래 없음(백테스트·모의 매매만).",
+        "tools": "Vibe-Trading(백테스트), Read, Write",
+        "forbidden": "실거래·주문·이체, 거래소 키, 수익 보장 표현"
+      },
+      {
+        "name": "market-terminal",
+        "title": "시장 자료 보기",
+        "state": "planned",
+        "role": "FinceptTerminal(AGPL-3.0, 따로 설치)로 시세·뉴스·포트폴리오 자료를 보고 백테스트 팀에 넘길 요약을 쓴다.",
+        "tools": "FinceptTerminal(별도 앱), Read, Write",
+        "forbidden": "알고리즘 실거래, Agent Hub 에 코드 섞기(AGPL), 투자 권유 표현"
+      }
+    ]
+  },
+  "beta": true,
+  "default_enabled": false,
+  "summary": "전략을 과거 데이터로 백테스트하고 보고서만 씁니다. 실거래·주문·이체 기능은 없습니다. 결과는 투자 조언이 아닙니다.",
+  "highlights": [
+    "백테스트 보고서",
+    "모의 비중·리스크 점검",
+    "실거래 없음"
+  ],
+  "run": {
+    "agent": "backtest-researcher",
+    "output": "result.md",
+    "kind": "document",
+    "form": [
+      {
+        "key": "topic",
+        "label": "전략 설명",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "details",
+        "label": "자세한 요청(선택)",
+        "type": "textarea"
+      }
+    ],
+    "prompt": [
+      "{agent} 서브에이전트의 역할로 아래 일을 한다(도구: {tool_name}).",
+      "- 요청: {topic}",
+      "{details_line}",
+      "- 결과는 {out} 에 마크다운으로 저장한다. 맨 위에 한 줄 요약, 맨 끝에 「확인 필요」 목록을 둔다.",
+      "- 커밋·삭제·게시·제출·결제는 하지 않는다. 근거를 모르는 사실·숫자는 「확인 필요」에 적는다.",
+      "- 실거래·주문·이체는 절대 하지 않는다. 보고서 맨 위에 「투자 조언이 아님」을 적는다."
+    ]
+  },
+  "settings": {},
+  "external": [
+    {
+      "name": "Vibe-Trading",
+      "license": "MIT",
+      "how": "선택: 고객 PC에 따로 설치(백테스트만)"
+    },
+    {
+      "name": "FinceptTerminal",
+      "license": "AGPL-3.0",
+      "how": "선택: 별도 앱으로만, 코드 섞지 않음"
+    }
+  ],
+  "safety": [
+    "실거래·주문·이체·거래소 키 없음",
+    "수익 보장 표현 금지"
+  ],
+  "version": "1.0.0",
+  "default_agents": [
+    "backtest-researcher",
+    "market-scanner",
+    "position-sizer",
+    "entry-planner",
+    "risk-guard",
+    "market-terminal",
+    "web-reader"
+  ],
+  "order": 60
+}

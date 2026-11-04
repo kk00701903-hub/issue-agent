@@ -1,0 +1,133 @@
+{
+  "_설명": "요금제. 가격(원/월, 부가세 별도)은 예시 — 판매 전에 확정할 것. tools_max = 고를 수 있는 도구 수(공용 에이전트는 항상 포함), devices = 연결할 수 있는 PC 수. billing = 결제 기간별 할인(콘솔 결제에 자동 적용), extra_discounts = 조건부 추가 할인(증빙 확인 뒤 관리자가 적용), max_discount = 모든 할인을 합친 상한.",
+  "currency": "KRW",
+  "trial_days": 14,
+  "plans": [
+    {
+      "id": "trial",
+      "name": "평가판",
+      "price": 0,
+      "tools_max": 99,
+      "devices": 1,
+      "public": false,
+      "desc": "가입 후 14일, 모든 도구"
+    },
+    {
+      "id": "starter",
+      "name": "스타터",
+      "price": 29000,
+      "tools_max": 1,
+      "devices": 1,
+      "public": true,
+      "desc": "도구 1개 + 공용 에이전트, PC 1대",
+      "for": "1인 크리에이터"
+    },
+    {
+      "id": "pro",
+      "name": "프로",
+      "price": 79000,
+      "tools_max": 3,
+      "devices": 2,
+      "public": true,
+      "desc": "도구 3개 + 공용 에이전트, PC 2대",
+      "for": "여러 채널을 굴리는 부업·소상공인",
+      "featured": true
+    },
+    {
+      "id": "team",
+      "name": "팀",
+      "price": 199000,
+      "tools_max": 99,
+      "devices": 5,
+      "public": true,
+      "desc": "모든 도구, PC 5대, 베타 도구 포함",
+      "for": "작은 팀·에이전시"
+    }
+  ],
+  "tools": [
+    {
+      "id": "instagram",
+      "name": "인스타그램 릴스·카드뉴스"
+    },
+    {
+      "id": "kmong",
+      "name": "크몽 전문가 서비스"
+    },
+    {
+      "id": "webnovel",
+      "name": "웹소설 연재"
+    },
+    {
+      "id": "goods",
+      "name": "이모티콘·굿즈"
+    },
+    {
+      "id": "devteam",
+      "name": "사내 개발"
+    },
+    {
+      "id": "game",
+      "name": "게임 개발"
+    },
+    {
+      "id": "invest",
+      "name": "투자 연구(베타)",
+      "beta": true
+    }
+  ],
+  "billing": [
+    {
+      "months": 1,
+      "label": "월간",
+      "discount": 0.0
+    },
+    {
+      "months": 6,
+      "label": "6개월 선결제",
+      "discount": 0.1
+    },
+    {
+      "months": 12,
+      "label": "연간",
+      "discount": 0.2
+    }
+  ],
+  "extra_discounts": [
+    {
+      "id": "early",
+      "label": "출시 기념(조기 가입)",
+      "rate": 0.1,
+      "rule": "정식 출시 후 90일 안에 연간 결제한 고객, 첫 1년만",
+      "proof": "결제일"
+    },
+    {
+      "id": "renew",
+      "label": "연간 재계약",
+      "rate": 0.05,
+      "rule": "연간 요금제를 끊김 없이 다시 1년 결제",
+      "proof": "이전 결제 기록"
+    },
+    {
+      "id": "edu",
+      "label": "학생·교육·비영리",
+      "rate": 0.15,
+      "rule": "학생, 학교·교육기관, 비영리 단체",
+      "proof": "재학·재직 증명 또는 고유번호증"
+    },
+    {
+      "id": "startup",
+      "label": "1인 창업·소상공인",
+      "rate": 0.1,
+      "rule": "사업자등록 3년 이내 개인사업자·소상공인",
+      "proof": "사업자등록증"
+    },
+    {
+      "id": "volume",
+      "label": "여러 좌석",
+      "rate": 0.1,
+      "rule": "한 회사가 팀 요금제 2개 이상(PC 10대 이상)",
+      "proof": "주문 내역"
+    }
+  ],
+  "max_discount": 0.35
+}

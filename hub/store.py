@@ -53,10 +53,17 @@ def rules():
 
 
 def load_groups():
-    data = read_json(HUB / "agents.json", {}) or {}
-    if isinstance(data, list):  # 옛 형식(평면 목록) 호환
-        return [{"id": "all", "title": "에이전트", "lead": "", "purpose": "", "agents": data}]
-    return data.get("groups", [])
+    """팀 목록 = 켜진 도구의 팀(tools/*/tool.json) + 고객 수정분(data/agents.local.json).
+
+    옛 설치본의 hub/agents.json 은 처음 한 번 data/agents.local.json 으로 옮겨 고객 수정분으로 쓴다."""
+    old, local = HUB / "agents.json", DATA / "agents.local.json"
+    if old.exists() and not local.exists():
+        data = read_json(old, {}) or {}
+        if isinstance(data, list):
+            data = {"groups": [{"id": "all", "title": "에이전트", "lead": "", "purpose": "", "agents": data}]}
+        write_json(local, data)
+    from hub import toolkit  # 순환 import 방지
+    return toolkit.teams()
 
 
 def load_agents():
@@ -102,9 +109,16 @@ def get_run(rid):
 
 
 def get_package(rid):
+    """결과: 인스타그램은 package.json(dict), 문서형 도구는 {"document": 본문}."""
     if not valid_id(rid):
         return None
-    return read_json(run_dir(rid) / "package.json")
+    pkg = read_json(run_dir(rid) / "package.json")
+    if pkg is not None:
+        return pkg
+    md = run_dir(rid) / "result.md"
+    if md.exists():
+        return {"document": md.read_text(encoding="utf-8")[:200_000]}
+    return None
 
 
 def list_runs(limit=100):
@@ -149,6 +163,85 @@ def tail_events(n=80):
             out.append(json.loads(line))
         except json.JSONDecodeError:
             pass
+    return out
+
+
+LIVE_TOOL_SEC = 120        # 마지막 도구 사용 뒤 이 시간 안이면 「일하는 중」
+LIVE_TASK_MAX_SEC = 3 * 3600   # 끝 기록이 없는 맡긴 일은 이 시간이 지나면 끝난 것으로 본다(창을 닫은 경우)
+MAIN_AGENT = "claude-main"     # PC에서 직접 대화하는 본 세션(총괄)
+
+
+def live_agents(scan=4000, now=None):
+    """훅 기록으로 지금 실제로 누가 무엇을 하는지 요약한다(모니터 「사무실」이 이대로 움직인다).
+
+    돌려주는 값: {에이전트: {busy, since, last_ts, last_tool, last_detail, task, by, tools_today}}
+    - busy: 맡긴 일이 진행 중이거나(agent_start 뒤 agent_stop 없음), 본 세션이 답하는 중이거나(turn_start 뒤 turn_end 없음),
+            최근 LIVE_TOOL_SEC 안에 도구를 썼음
+    """
+    try:
+        with open(EVENTS, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-scan:]
+    except FileNotFoundError:
+        return {}
+    now = now or datetime.now().astimezone()
+    today = now.date().isoformat()
+    out, open_tasks, turn = {}, {}, {}
+
+    def ts_of(e):
+        try:
+            return datetime.fromisoformat(e.get("ts", ""))
+        except Exception:
+            return None
+
+    def slot(name):
+        return out.setdefault(name, {"busy": False, "since": "", "last_ts": "", "last_tool": "", "last_detail": "",
+                                     "task": "", "by": "", "tools_today": 0})
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        k = e.get("kind")
+        name = e.get("agent") or MAIN_AGENT
+        if k == "tool":
+            # 서브에이전트 이름이 안 붙은 기록(옛 Claude Code)인데 맡긴 일이 딱 하나 진행 중이면 그 에이전트가 쓴 것으로 본다
+            if not e.get("agent"):
+                mine = [t for t in open_tasks.values() if t["session"] == e.get("session", "") and t["agent"] != MAIN_AGENT]
+                if len(mine) == 1:
+                    name = mine[0]["agent"]
+            s = slot(name)
+            s.update(last_ts=e.get("ts", ""), last_tool=e.get("tool", ""), last_detail=e.get("detail", ""))
+            if (e.get("ts") or "").startswith(today):
+                s["tools_today"] += 1
+        elif k == "agent_start":
+            open_tasks[e.get("task") or e.get("ts")] = {"agent": name, "ts": e.get("ts", ""), "detail": e.get("detail", ""),
+                                                        "by": e.get("by") or MAIN_AGENT, "session": e.get("session", "")}
+            slot(name).update(last_ts=e.get("ts", ""))
+        elif k == "agent_stop":
+            open_tasks.pop(e.get("task") or "", None)
+            slot(name).update(last_ts=e.get("ts", ""), last_tool="", last_detail="맡은 일 끝남: " + (e.get("detail") or ""))
+        elif k == "turn_start":
+            turn[e.get("session", "")] = e.get("ts", "")
+            slot(name).update(last_ts=e.get("ts", ""))
+        elif k == "turn_end":
+            turn.pop(e.get("session", ""), None)
+            slot(name).update(last_ts=e.get("ts", ""))
+    for t in open_tasks.values():
+        st = ts_of(t)
+        if st and (now - st).total_seconds() > LIVE_TASK_MAX_SEC:
+            continue
+        s = slot(t["agent"])
+        s.update(busy=True, since=t["ts"], task=t["detail"], by=t["by"])
+    for sess, ts in turn.items():
+        st = ts_of({"ts": ts})
+        if st and (now - st).total_seconds() <= LIVE_TASK_MAX_SEC:
+            s = slot(MAIN_AGENT)
+            s["busy"] = True
+            s["since"] = s["since"] or ts
+    for s in out.values():
+        lt = ts_of({"ts": s["last_ts"]})
+        if lt and (now - lt).total_seconds() <= LIVE_TOOL_SEC and s["last_tool"]:
+            s["busy"] = True
     return out
 
 
@@ -206,5 +299,6 @@ def usage_summary():
         "date": day,
         "total_usd": round(total, 4),
         "budget_usd": cfg.get("daily_budget_usd"),
+        "agent_budgets_usd": cfg.get("agent_budgets_usd") or {},
         "per_agent": per_agent,
     }
