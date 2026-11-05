@@ -12,7 +12,7 @@ from pathlib import Path
 import os
 import secrets
 
-from hub import cloud_link, flows, hr, license, models, plans, runner, secrets_env, store, toolkit
+from hub import cloud_link, flows, hr, license, models, plans, runner, schedules, secrets_env, store, toolkit
 from hub.version import VERSION
 
 SESSIONS = set()  # 로그인 세션 토큰(메모리). 서버를 끄면 다시 로그인한다.
@@ -73,6 +73,7 @@ PLAN_RE = re.compile(r"^/api/plans/(\d{4}-\d{2})/([A-Za-z0-9._-]+)$")
 TOOL_RE = re.compile(r"^/api/tools/([a-z][a-z0-9_-]{1,30})$")
 TOOL_AGENT_RE = re.compile(r"^/api/tools/([a-z][a-z0-9_-]{1,30})/agents$")
 TOOL_RULES_RE = re.compile(r"^/api/tools/([a-z][a-z0-9_-]{1,30})/rules$")
+SCHED_RE = re.compile(r"^/api/schedules/(job_[0-9a-f]{8})/(run|delete)$")
 HR_RE = re.compile(r"^/api/hr/([A-Za-z0-9_.-]{1,60})/(shift|decide|reinstate|evidence)$")
 
 
@@ -145,6 +146,7 @@ def build_state():
         "hr": hr.summary(),
         "lan": lan_status(),
         "keys": secrets_env.status(),
+        "schedules": schedules.status(),
         "perf": hr.performance(),
         "usage": store.usage_summary(),
         "branding": cfg.get("branding", {}),
@@ -330,20 +332,43 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             plan = plans.save(m.group(1), m.group(2), body)
             return self._send(200, {"ok": True, "plan": plan}) if plan is not None else self._send(400, {"error": "월(YYYY-MM)·계정을 확인하세요"})
-        if path == "/api/demo":  # 화면 시험용: 에이전트를 부르지 않는 드라이런만 허용(비용 없음)
-            scenario = body.get("scenario") if body.get("scenario") in ("ok", "bad") else "ok"
+        if path in ("/api/demo", "/api/run"):
+            # /api/demo: 화면 시험용 드라이런(비용 없음). /api/run: 「만들기」의 「지금 실행」 — 실제 에이전트 실행(비용 발생, 결과는 승인함으로).
+            real = path == "/api/run"
+            scenario = None if real else (body.get("scenario") if body.get("scenario") in ("ok", "bad") else "ok")
             tool = body.get("tool") if toolkit.manifest(str(body.get("tool") or "")) else "instagram"
+            topic = str(body.get("topic") or "").strip()
+            if real and not topic:
+                return self._send(400, {"error": "주제(맡길 일)를 적어 주세요"})
             if tool == "instagram":
                 ids = [a["id"] for a in toolkit.accounts("instagram")]
                 if not ids:
                     return self._send(400, {"error": "인스타그램 도구에 계정을 먼저 등록하세요"})
                 account = body.get("account") if body.get("account") in ids else ids[0]
-                params = {"account": account, "topic": str(body.get("topic") or "(데모) 계약 전 확인할 3가지")[:80], "series": str(body.get("series", ""))[:40], "type": body.get("type", "general")}
+                params = {"account": account, "topic": (topic or "(데모) 계약 전 확인할 3가지")[:80], "series": str(body.get("series", ""))[:40], "type": body.get("type", "general")}
             else:
-                params = {"topic": str(body.get("topic") or "(데모) 시험 요청")[:80]}
-                if tool == "kmong":
+                params = {"topic": (topic or "(데모) 시험 요청")[:200]}
+                for k, v in (body.get("params") or {}).items() if isinstance(body.get("params"), dict) else []:
+                    if k not in ("topic", "tool") and str(v).strip():
+                        params[str(k)[:30]] = str(v)[:2000]
+                if tool == "kmong" and params.get("kind") not in ("service", "ebook", "knowhow"):
                     params["kind"] = body.get("kind") if body.get("kind") in ("service", "ebook", "knowhow") else "service"
             agent = toolkit.run_spec(tool).get("agent")
+            want = str(body.get("agent") or "")
+            if want and want != agent:   # 업무 배정 화면에서 담당 에이전트를 골라 맡김 — 그 부서에 연결된 에이전트만
+                if want not in toolkit.connected_agents(tool):
+                    return self._send(400, {"error": "이 부서에 연결된 에이전트가 아닙니다 — 부서 설정에서 먼저 연결하세요"})
+                agent = want
+            if real:
+                runner.load_dotenv()
+                if not any(k["name"] == "ANTHROPIC_API_KEY" and k["set"] for k in secrets_env.status()):
+                    return self._send(400, {"error": "API 키가 없습니다 — 프로젝트 설정 → 「API 키」에 Anthropic 키를 넣으세요"})
+                ok, why = toolkit.check_run(tool, agent)
+                if not ok:
+                    return self._send(400, {"error": why})
+                ok, why = hr.can_work(agent)
+                if not ok:
+                    return self._send(400, {"error": why})
             threading.Thread(target=runner.run_agent, args=(agent, params, scenario), kwargs={"tool": tool}, daemon=True).start()
             return self._send(202, {"ok": True})
         m = TOOL_AGENT_RE.match(path)
@@ -366,6 +391,18 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(body.get("settings"), dict):
                 toolkit.save_settings(tid, body["settings"])
             return self._send(200, {"ok": True, "tools": toolkit.status()})
+        if path == "/api/schedules":   # 예약 작업 추가·고치기
+            try:
+                j = schedules.save_job(body if isinstance(body, dict) else {})
+            except ValueError as e:
+                return self._send(400, {"error": str(e) or "시간 표기(cron)를 확인하세요"})
+            return self._send(200, {"ok": True, "job": j, "schedules": schedules.status()})
+        m = SCHED_RE.match(path)
+        if m:
+            if m.group(2) == "delete":
+                return self._send(200, {"ok": True, "schedules": schedules.status()}) if schedules.delete_job(m.group(1)) else self._send(404, {"error": "없는 작업"})
+            ok, msg = schedules.run_now(m.group(1))
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg} if ok else {"error": msg})
         if path == "/api/keys":   # API 키 넣기: 이 PC에서 연 화면에서만(휴대폰 보기로는 못 바꿈)
             if self.client_address[0] not in ("127.0.0.1", "::1"):
                 return self._send(403, {"error": "API 키는 이 PC에서 연 관리 화면에서만 바꿀 수 있습니다"})
@@ -409,7 +446,8 @@ def main():
     if lan:
         for u in lan_status()["urls"]:
             print(f"휴대폰(같은 와이파이)에서 열기: {u}")
-    cloud_link.start_background()  # 웹 콘솔에 연결돼 있으면 주기적으로 상태 보고·이용권 갱신
+    cloud_link.start_background()
+    schedules.start_background()   # 예약 작업 시계(관리 화면이 실행하는 작업만)  # 웹 콘솔에 연결돼 있으면 주기적으로 상태 보고·이용권 갱신
     print(f"Agent Hub: http://127.0.0.1:{port}  (끄려면 Ctrl+C)")
     try:
         srv.serve_forever()

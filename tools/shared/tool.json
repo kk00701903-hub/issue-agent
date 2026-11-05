@@ -97,6 +97,14 @@
         "role": "「AI 티 나는 디자인」(뻔한 보라 그라데이션, 같은 카드 반복, 의미 없는 아이콘)을 찾아 고칠 곳을 표시한다 — 관리 화면, 카드뉴스, 표지, 판매 페이지.",
         "tools": "Read, Skill(impeccable·taste-skill)",
         "forbidden": "직접 수정, 정해진 양식 바꾸기"
+      },
+      {
+        "name": "work-logger",
+        "title": "작업 기록",
+        "state": "active",
+        "role": "모든 팀 공통. 실행·승인·반려·특이사항을 docs/work-log.md(저장소별 docs/work-log.md)에 남긴다.",
+        "tools": "Write(로그 파일만)",
+        "forbidden": "-"
       }
     ]
   },

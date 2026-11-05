@@ -28,10 +28,15 @@
 
   // 관리 화면(app.js)의 아이콘을 빌려 쓴다(없으면 빈칸)
   const I = (n) => (typeof window.ic === "function" ? window.ic(n, 14, 2.2) : "");
-  function mount(root, state, onSaved) {
+  let lock = null, lastArgs = null;
+  // opts.lock = 부서(팀) ID: 그 부서의 흐름만 보이고 위의 그룹 칩을 숨긴다(부서 화면에 넣을 때). 관리 화면은 늘 opts 를 넘긴다(안에서 다시 그릴 때만 생략)
+  function mount(root, state, onSaved, opts) {
+    if (opts) { if ((opts.lock || null) !== lock && dirty) { /* 다른 부서로 옮기면 저장 안 한 변경은 버린다 */ } lock = opts.lock || null; if (lock && group !== lock) { group = lock; flow = null; } }
+    else if (lastArgs && !onSaved) { onSaved = lastArgs; }
+    lastArgs = onSaved;
     root.replaceChildren();
     const groups = state.groups;
-    if (!group) group = groups[0].id;
+    if (!group || !groups.some((x) => x.id === group)) group = groups[0].id;
     const g = groups.find((x) => x.id === group) || groups[0];
     if (!flow || flow._group !== g.id) { flow = JSON.parse(JSON.stringify(g.flow_graph)); flow._group = g.id; dirty = false; sel = selEdge = null; aiInfo = null; }
     const agentMap = Object.fromEntries(groups.flatMap((x) => x.agents).map((a) => [a.name, a]));
@@ -56,7 +61,7 @@
       el("span", { class: "fl-sep" }),
       el("button", { class: "fl-btn", title: "저장한 상태로 되돌리기", onclick: () => { flow = null; stopPlay(); mount(root, state, onSaved); } }, I("refresh"), "되돌리기"),
       el("button", { class: "fl-btn primary", onclick: save }, "저장"), status);
-    root.append(el("div", { class: "fl-top" }, chips, tools));
+    root.append(el("div", { class: "fl-top" }, lock ? el("span", { class: "fl-title" }, "워크플로우 — 상자를 끌어 고치고, 「AI로 만들기」로 새로 짤 수 있습니다") : chips, tools));
 
     // --- AI 패널 ---
     if (aiOpen) {
@@ -84,7 +89,7 @@
     palette.append(el("div", { class: "fl-side-h" }, "노드 추가"));
     const addBtn = (label, who, kind) => el("button", { class: "fl-pal k-" + kind, onclick: () => addNode(label, who, kind) },
       el("span", { class: "fl-ic" }, KIND[kind].icon), el("span", {}, el("b", {}, label), el("small", {}, who)));
-    palette.append(el("div", { class: "fl-side-s" }, "이 그룹"));
+    palette.append(el("div", { class: "fl-side-s" }, "이 부서"));
     for (const a of g.agents) palette.append(addBtn(a.title, a.name, kindOf(a)));
     const shared = groups.find((x) => x.id === "shared");
     if (shared && g.id !== "shared") { palette.append(el("div", { class: "fl-side-s" }, "공통")); for (const a of shared.agents) palette.append(addBtn(a.title, a.name, kindOf(a))); }
@@ -291,5 +296,5 @@
       if (warns.length) els.wrap.append(el("div", { class: "fl-warn" }, warns.map((w) => el("div", {}, "⚠ " + w))));
     }
   }
-  window.FlowEditor = { mount, reset: () => { flow = null; } };
+  window.FlowEditor = { mount, reset: () => { flow = null; }, select: (id) => { group = id; flow = null; }, isDirty: () => dirty };
 })();

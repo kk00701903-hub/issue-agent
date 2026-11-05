@@ -119,9 +119,9 @@ function syncTools() {
 }
 const toolName = (id) => (TOOL[id || "instagram"] || {}).name || id || "인스타그램";
 const runTools = () => (S.tools || []).filter((t) => t.enabled && t.run && t.run.agent);
-const AGENT_STATE = { active: ["사용 중", "green"], optional: ["선택", "blue"], planned: ["예정", ""] };
+const AGENT_STATE = { active: ["사용 중", "green"], ready: ["준비됨", "purple"], optional: ["선택", "blue"], planned: ["예정", ""] };   // 준비됨 = 정의 파일이 있어 부를 수 있음
 const lz = (status) => h("span", { class: "lz " + (STATUS_LZ[status] || "") }, STATUS[status] || status);
-const PALETTE = ["#1D7AFC", "#1F845A", "#8F7EE7", "#E2B203", "#F38A3F", "#C9372C", "#2898BD", "#943D73", "#5B7F24", "#AE4787"];
+const PALETTE = ["#0C66E4", "#1F845A", "#6E5DC6", "#946F00", "#B65C02", "#C9372C", "#227D9B", "#943D73", "#5B7F24", "#AE4787"];   // 흰 글자 대비 4.5:1 이상
 function hashColor(s) { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; }
 function initials(name) {
   if (!name) return "?";
@@ -138,7 +138,16 @@ let S = null;               // /api/state
 let sig = "";               // 변경 감지
 let route = { page: "summary", id: null };
 let lastPage = "board";
+// 검수 규칙 ID → 사람이 읽는 이름(검수기·성과표에 보임)
+const RULE_KO = { required: "빈 칸", scene_speed: "장면 속도", caption_link: "캡션 링크", caption_hashtags: "해시태그", caption_preview: "캡션 첫 줄", account: "계정", preview: "미리보기",
+  bgm_banned: "금지 BGM", bgm_local: "BGM 파일", bgm_missing: "BGM 없음", bgm_repeat: "BGM 반복", bgm_rotation: "BGM 순서", bgm_source: "BGM 출처", bgm_world: "「세계의」 BGM",
+  voice_name: "음성 이름", voice_none: "무음 계정 음성", voice_order_mark: "순서 표시 읽기", voice_text_missing: "읽을 대본 없음", leader_intro: "지도자 소개", hook_form: "후킹 형식", nara_mix: "「나라」 섞임",
+  claim: "확인 필요 주장", style: "문체", absolute: "단정 표현", ask_price: "가격 문의", contact: "외부 연락처", guarantee: "보장 표현", kind: "서비스 종류", min_price: "최저 가격",
+  package_gap: "패키지 가격 차이", package_order: "패키지 순서", packages: "패키지", price: "가격", faq_privacy: "FAQ 개인정보", keywords: "검색 키워드", revisions: "수정 횟수", summary_len: "요약 길이", title_len: "제목 길이" };
+const ruleKo = (r) => RULE_KO[r] || r;
 let query = "";
+// 위 검색칸과 보드·목록의 검색칸은 같은 검색어를 쓴다 — 어느 쪽에 쳐도 양쪽에 같은 글자가 보이게
+function syncSearch() { const q = document.getElementById("q"); if (q && q.value !== query) q.value = query; for (const el of document.querySelectorAll("#page input.page-search")) if (el.value !== query) el.value = query; }
 let installEvt = null;
 const ui = {
   boardAccount: store.get("boardAccount", ""), boardAgent: "", boardOnlyErr: false, boardGroup: store.get("boardGroup", ""), closedLanes: [],
@@ -153,34 +162,38 @@ function keyOf(run) {
   const n = all.findIndex((r) => r.id === run.id) + 1;
   return ((S.branding && S.branding.logo_text) || "AH").toUpperCase() + "-" + (n || "?");
 }
+let deptScope = null;   // 부서 화면의 보드·작업 목록 탭에서만 그 부서 작업으로 좁힌다
 function filtered(runs) {
   const q = query.trim().toLowerCase();
-  return runs.filter((r) => !q || [r.topic, r.agent, r.account, keyOf(r), STATUS[r.status], agentTitle[r.agent]].some((x) => String(x || "").toLowerCase().includes(q)));
+  const dg = deptScope && S.groups.find((g) => g.id === deptScope);
+  if (dg) runs = deptRuns(dg);
+  return runs.filter((r) => !q || [r.topic, r.agent, r.account, ACCOUNTS[r.account], toolName(r.tool), keyOf(r), STATUS[r.status], agentTitle[r.agent]].some((x) => String(x || "").toLowerCase().includes(q)));
 }
 
 // ---------- 껍데기(상단·사이드바) ----------
+// 옆 메뉴: 홈 → 부서(업무 단위, 상태를 받으면 채움) → 결과물 → 에이전틱 운영
 const NAV = [
-  { page: "summary", label: "오늘 할 일", icon: "summary" },
-  { sec: "작업 순서" },
-  { page: "make", label: "1. 만들기", icon: "plus" },
-  { page: "board", label: "2. 진행 확인", icon: "board" },
-  { page: "inbox", label: "3. 승인하기", icon: "inbox", count: true },
-  { page: "publish", label: "4. 게시하기", icon: "download", pcount: true },
-  { sec: "보기" },
-  { page: "list", label: "목록", icon: "list" },
+  { page: "summary", label: "홈", icon: "summary" },
+  { sec: "부서", depts: true },
+  { sec: "결과물" },
+  { page: "inbox", label: "승인함", icon: "inbox", count: true },
+  { page: "publish", label: "게시", icon: "download", pcount: true },
+  { page: "board", label: "진행 보드", icon: "board" },
+  { page: "list", label: "전체 작업", icon: "list" },
   { page: "calendar", label: "캘린더", icon: "calendar" },
-  { sec: "운영" },
-  { page: "tools", label: "도구", icon: "tool" },
-  { page: "automation", label: "자동화", icon: "automation" },
+  { sec: "에이전틱 운영" },
+  { page: "assign", label: "업무 배정", icon: "list" },
+  { page: "automation", label: "워크플로우·예약", icon: "automation" },
   { page: "agents", label: "에이전트", icon: "agents" },
-  { page: "hr", label: "인사", icon: "shield" },
   { page: "monitor", label: "모니터", icon: "monitor" },
-  { page: "activity", label: "활동", icon: "activity" },
+  { page: "hr", label: "인사", icon: "shield" },
+  { page: "activity", label: "활동 기록", icon: "activity" },
+  { page: "tools", label: "부서 관리", icon: "tool" },
 ];
-const TITLES = { tools: "도구", make: "1. 만들기", publish: "4. 게시하기", summary: "오늘 할 일", board: "보드", list: "목록", calendar: "캘린더", inbox: "승인함", automation: "자동화", agents: "에이전트", hr: "인사", monitor: "모니터", activity: "활동", settings: "설정" };
+const TITLES = { assign: "업무 배정", dept: "부서", tools: "부서 관리", make: "일 맡기기", publish: "게시", summary: "오늘 할 일", board: "보드", list: "목록", calendar: "캘린더", inbox: "승인함", automation: "자동화", agents: "에이전트", hr: "인사", monitor: "모니터", activity: "활동", settings: "설정" };
 
 const STEPS = [
-  { page: "make", label: "만들기", desc: "도구를 고르고 에이전트에게 일을 맡깁니다." },
+  { page: "make", label: "만들기", desc: "부서를 고르고 그 부서의 에이전트에게 일을 맡깁니다." },
   { page: "board", label: "진행 확인", desc: "에이전트가 만들고 규칙 검수기가 확인하는 중입니다. 검수 실패는 다시 만듭니다." },
   { page: "inbox", label: "승인하기", desc: "결과물을 보고 승인(게시 준비 완료) 또는 반려합니다." },
   { page: "publish", label: "게시하기", desc: "캡션·소개 댓글을 복사해 인스타 「콘텐츠 예약」으로 직접 올립니다. 자동 게시는 없습니다." },
@@ -196,23 +209,33 @@ function stepGuide(i) {
   const s = STEPS[i], nx = STEPS[i + 1], cur = nowStep();
   return h("div", { class: "step-guide" + (cur === i ? " now" : "") },
     h("span", { class: "sg-n" }, i + 1), h("div", { class: "grow" }, h("b", {}, `${i + 1}단계 · ${s.label}`), h("div", { class: "small" }, s.desc)),
-    cur !== i ? h("a", { class: "btn sm", href: "#" + STEPS[cur].page }, `지금 할 단계: ${cur + 1}. ${STEPS[cur].label}`) : h("span", { class: "lz blue" }, "지금 할 단계"),
-    nx ? h("a", { class: "btn sm subtle", href: "#" + nx.page }, `다음: ${i + 2}. ${nx.label} →`) : null);
+    // 안내는 한 방향만: 다른 단계에 기다리는 일이 있으면 그곳으로 가는 버튼 하나, 없으면 이 단계 다음으로
+    cur !== i && cur !== 0 ? [h("span", { class: "small sg-wait" }, waitText(cur)), h("a", { class: "btn sm", href: "#" + STEPS[cur].page }, `${cur + 1}. ${STEPS[cur].label} 하러 가기 →`)]
+      : [cur === i ? h("span", { class: "lz blue" }, "지금 할 단계") : null, nx ? h("a", { class: "btn sm subtle", href: "#" + nx.page }, `다음: ${i + 2}. ${nx.label} →`) : null]);
+}
+function waitText(st) {
+  if (st === 2) return `승인 기다림 ${S.runs.filter((r) => r.status === "awaiting_approval").length}건이 있어요`;
+  if (st === 3) return `게시할 것 ${S.runs.filter((r) => r.status === "approved" && !postedIds().has(r.id)).length}건이 있어요`;
+  return `작업 중 ${S.runs.filter((r) => ["queued", "running", "validating"].includes(r.status)).length}건이 있어요`;
 }
 
 function buildShell() {
   const app = $("#app"); app.replaceChildren();
   const search = h("input", { id: "q", type: "search", placeholder: "검색", "aria-label": "검색", autocomplete: "off",
-    oninput: (e) => { query = e.target.value; if (!["board", "list", "inbox"].includes(route.page)) { quickSearch(); return; } renderPage(true); },
+    oninput: (e) => { query = e.target.value; syncSearch(); if (!["board", "list", "inbox"].includes(route.page)) { quickSearch(); return; } renderPage(true); },
     onfocus: () => { if (query && !["board", "list", "inbox"].includes(route.page)) quickSearch(); },
     onblur: () => setTimeout(closePop, 150),
-    onkeydown: (e) => { if (e.key === "Enter" && !["board", "list"].includes(route.page)) { closePop(); go("list"); } if (e.key === "Escape") { e.target.value = ""; query = ""; e.target.blur(); renderPage(true); } } });
+    onkeydown: (e) => { if (e.key === "Enter" && !["board", "list"].includes(route.page)) { closePop(); go("list"); } if (e.key === "Escape") { e.target.value = ""; query = ""; syncSearch(); e.target.blur(); renderPage(true); } } });
   const top = h("header", { class: "topbar" },
-    h("button", { class: "tb-icon", title: "사이드바 접기·펴기", "aria-label": "사이드바 접기·펴기", onclick: toggleSidebar }, ic("apps", 20)),
+    h("button", { class: "tb-icon", title: "앱 런처 — 부서·기능 찾기 (Ctrl+K)", "aria-label": "앱 런처", onclick: () => openLauncher() }, ic("apps", 20)),
     h("a", { class: "tb-brand", href: "#summary" }, h("span", { class: "logo", id: "logo" }, "AH"), h("span", { id: "product" }, "Agent Hub")),
-    h("nav", { class: "tb-nav tb-steps", "aria-label": "작업 순서" },
-      STEPS.map((s, i) => [i ? h("span", { class: "tb-arrow", "aria-hidden": "true" }, "→") : null, h("a", { href: "#" + s.page, "data-p": s.page }, h("b", {}, i + 1), s.label)])),
-    h("button", { class: "btn primary tb-create", onclick: () => go("make"), title: "만들기 (C)" }, ic("plus", 16), "만들기"),
+    h("nav", { class: "tb-nav", "aria-label": "주요 메뉴" },
+      h("a", { href: "#summary", "data-p": "summary" }, "내 작업"),
+      h("span", { class: "pop-anchor" }, h("button", { class: "tb-drop", id: "tb-dept", "aria-haspopup": "true", onclick: (e) => { e.stopPropagation(); toggleDeptMenu(); } }, "부서", ic("chevD", 14, 2.5))),
+      h("a", { href: "#inbox", "data-p": "inbox" }, "승인함"),
+      h("a", { href: "#automation", "data-p": "automation" }, "워크플로우"),
+      h("a", { href: "#monitor", "data-p": "monitor" }, "모니터")),
+    h("button", { class: "btn primary tb-create", onclick: () => quickCreate(), title: "일 맡기기 (C)" }, ic("plus", 16), "만들기"),
     h("span", { class: "tb-spacer" }),
     h("span", { class: "tb-usage", id: "usage" }),
     h("label", { class: "tb-search pop-anchor" }, ic("search", 16), search, h("kbd", {}, "/")),
@@ -222,11 +245,10 @@ function buildShell() {
     h("a", { class: "tb-icon", href: "#settings", title: "설정", "aria-label": "설정" }, ic("settings", 20)),
     h("span", { class: "pop-anchor", style: "margin-left:4px" }, h("button", { class: "tb-icon", id: "me", "aria-label": "내 메뉴", title: "내 메뉴", onclick: (e) => { e.stopPropagation(); toggleMe(); } }, avatar("사람", "", "나(승인 담당)"))));
   const side = h("aside", { class: "sidebar", "aria-label": "프로젝트 메뉴" },
-    h("div", { class: "sb-project" }, h("span", { class: "avatar sq", id: "proj-av", style: "--av:#0C66E4" }, "AH"),
-      h("div", {}, h("b", { id: "proj-name" }, "Agent Hub"), h("small", { id: "proj-sub" }, "에이전트 운영 프로젝트"))),
-    h("div", { class: "sb-scroll" }, NAV.map((n) => n.sec ? h("div", { class: "sb-sec" }, n.sec)
+    h("div", { class: "sb-project", id: "sb-project" }),
+    h("div", { class: "sb-scroll" }, NAV.map((n) => n.depts ? [h("div", { class: "sb-sec" }, n.sec), h("div", { id: "sb-depts" })] : n.sec ? h("div", { class: "sb-sec" }, n.sec)
       : h("a", { class: "sb-item", href: "#" + n.page, "data-p": n.page, title: n.label }, ic(n.icon, 20), h("span", {}, n.label), n.count ? h("b", { class: "sb-count hot hide", id: "badge" }, "0") : null, n.pcount ? h("b", { class: "sb-count hide", id: "pbadge" }, "0") : null))),
-    h("div", { class: "sb-foot" }, h("a", { class: "sb-item", href: "#settings", "data-p": "settings", title: "설정" }, ic("settings", 20), h("span", {}, "프로젝트 설정"))));
+    h("div", { class: "sb-foot" }, h("a", { class: "sb-item", href: "#settings", "data-p": "settings", title: "설정" }, ic("settings", 20), h("span", {}, "설정"))));
   const collapse = h("button", { class: "sb-collapse", title: "사이드바 접기·펴기", "aria-label": "사이드바 접기·펴기", onclick: toggleSidebar }, ic("chevL", 14, 2.5));
   const main = h("main", { class: "main" }, h("div", { id: "banner", class: "banner hide" }), h("div", { id: "page" }));
   // 모바일: 아래 탭 막대(자주 보는 5곳) + 「더보기」를 누르면 옆 메뉴가 서랍처럼 열린다
@@ -245,13 +267,11 @@ function applyBranding(b, version) {
   if (!b) return;
   const name = b.product_name || "Agent Hub", logo = (b.logo_text || "AH").slice(0, 3);
   document.title = name + (route.page ? " · " + (TITLES[route.page] || "") : "");
-  for (const el of $$("#logo, #proj-av, .login-card .logo")) el.textContent = logo;
+  for (const el of $$("#logo, .login-card .logo")) el.textContent = logo;
   if ($("#product")) $("#product").textContent = name;
-  if ($("#proj-name")) $("#proj-name").textContent = b.customer_name || name;
-  if ($("#proj-sub")) $("#proj-sub").textContent = name + (version ? " v" + version : "");
   if (b.accent) {
     document.documentElement.style.setProperty("--logo", b.accent);
-    for (const el of $$("#logo, #proj-av, .login-card .logo")) el.style.background = b.accent;
+    for (const el of $$("#logo, .login-card .logo")) el.style.background = b.accent;
     const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = b.accent;
   }
 }
@@ -262,7 +282,7 @@ function updateChrome() {
   else if (lic.mode === "trial") { banner.className = "banner"; banner.replaceChildren(ic("clock", 16), `평가판 — ${lic.days_left}일 남음 (${lic.expires}까지). `, h("a", { href: "#settings" }, "라이선스 키 입력")); }
   else banner.className = "banner hide";
   const waiting = S.runs.filter((r) => OPEN.includes(r.status)).length;
-  const b = $("#badge"); if (b) { b.textContent = waiting; b.classList.toggle("hide", !waiting); }
+  const b = $("#badge"); if (b) { b.textContent = waiting; b.classList.toggle("hide", !waiting); b.title = `처리할 것 ${waiting}건(승인 대기 ${S.runs.filter((r) => r.status === "awaiting_approval").length} · 검수 실패 ${waiting - S.runs.filter((r) => r.status === "awaiting_approval").length})`; }
   for (const mb of $$(".mb-badge")) { mb.textContent = waiting > 99 ? "99+" : waiting; mb.classList.toggle("hide", !waiting); }
   const toPost = S.runs.filter((r) => r.status === "approved" && !postedIds().has(r.id)).length;
   const pb = $("#pbadge"); if (pb) { pb.textContent = toPost; pb.classList.toggle("hide", !toPost); }
@@ -272,8 +292,10 @@ function updateChrome() {
   const seen = store.get("bellSeen", "");
   const fresh = S.events.filter((e) => (e.kind === "blocked" || e.kind === "status") && (e.ts || "") > seen).length;
   const bn = $("#bell-n"); if (bn) { bn.textContent = fresh > 9 ? "9+" : fresh; bn.classList.toggle("hide", !fresh); }
-  const navPage = route.page === "issue" ? lastPage : route.page;
+  renderDeptNav(); renderSbProject();
+  const navPage = route.page === "issue" ? lastPage : route.page === "dept" ? "dept/" + route.id : route.page;
   for (const a of $$(".sb-item, .tb-nav a, .mobnav a")) a.classList.toggle("on", a.dataset.p === navPage);
+  const td = $("#tb-dept"); if (td) td.classList.toggle("on", String(navPage).startsWith("dept/") || navPage === "tools");
 }
 
 // ---------- 라우팅 ----------
@@ -281,25 +303,35 @@ const ALIAS = { home: "summary", flow: "automation", log: "activity", "": "summa
 function parseHash() {
   const raw = decodeURIComponent(location.hash.slice(1));
   if (raw.startsWith("issue/")) return { page: "issue", id: raw.slice(6) };
+  if (raw.startsWith("dept/")) return { page: "dept", id: raw.slice(5) };
   const p = ALIAS[raw] != null ? ALIAS[raw] : raw;
   return { page: TITLES[p] ? p : "summary", id: null };
 }
 function go(page) { location.hash = page; }
 let flowMounted = false;
 function onRoute() {
-  const prev = route.page;
+  const prev = route.page, prevId = route.id;
   route = parseHash();
-  if (route.page !== "issue") { closeModal(true); if (route.page !== prev || !$("#page").childElementCount) { if (route.page !== "automation") flowMounted = false; renderPage(); window.scrollTo(0, 0); } lastPage = route.page; }
+  if (route.page !== "issue") { closeModal(true); if (route.page !== prev || (route.page === "dept" && route.id !== prevId) || !$("#page").childElementCount) { if (route.page !== "automation") flowMounted = false; renderPage(); window.scrollTo(0, 0); } lastPage = route.page === "dept" ? "dept/" + route.id : route.page; }
   else { if (!$("#page").childElementCount || prev === "issue" && !$(".blanket")) { renderPage(); } openIssueModal(route.id); }
   if (S) { updateChrome(); applyBranding(S.branding, S.version); }
 }
 
 // ---------- 데이터 갱신 ----------
+// 관리 화면 서버와 연결이 끊기면 위에 띠를 띄운다(화면의 숫자가 멈춘 것을 알 수 있게)
+function setOffline(on) {
+  let el = document.getElementById("offline-bar");
+  if (!on) { if (el) el.remove(); return; }
+  if (el || !S) return;
+  el = h("div", { id: "offline-bar", class: "offline-bar", role: "status" }, ic("warn", 16), "관리 화면 서버와 연결이 끊겼습니다. 보이는 내용은 마지막으로 받은 것입니다 — PC에서 관리 화면(run.bat)이 켜져 있는지 확인하세요. 다시 연결되면 저절로 사라집니다.");
+  document.body.append(el);
+}
 async function refresh(force) {
   let r;
-  try { r = await api("/api/state"); } catch { return; }
+  try { r = await api("/api/state"); } catch { return setOffline(true); }
   if (r.status === 401) { const s = (await api("/api/session")).data; showLogin(s); return; }
-  if (!r.ok) return;
+  if (!r.ok) return setOffline(true);
+  setOffline(false);
   const first = !S;
   S = r.data; indexAgents(); syncTools();
   if (first || !$(".topbar")) { buildShell(); route = parseHash(); }
@@ -342,16 +374,20 @@ async function toggleNotify(btn) {
 function notifyButton() { const on = store.get("notify", false); return h("button", { class: "btn" + (on ? " sel" : ""), onclick: (e) => toggleNotify(e.currentTarget) }, ic("bell", 16), on ? "데스크톱 알림 켜짐" : "데스크톱 알림 켜기"); }
 
 // ---------- 페이지 그리기 ----------
+// 페이지 제목 앞의 아이콘 타일(Salesforce 개체 아이콘처럼)
+function pageIcon() { const n = NAV.find((x) => x.page === route.page) || (route.page === "make" ? { icon: "plus" } : route.page === "settings" ? { icon: "settings" } : null); return n && n.icon; }
 function pageHead(title, crumbs, actions) {
-  return [h("nav", { class: "crumbs", "aria-label": "위치" }, h("a", { href: "#summary" }, "프로젝트"), h("span", { class: "sep" }, "/"),
-      h("a", { href: "#summary" }, (S.branding && (S.branding.customer_name || S.branding.product_name)) || "Agent Hub"), ...(crumbs || []).flatMap((c) => [h("span", { class: "sep" }, "/"), c])),
-    h("div", { class: "page-head" }, h("h1", {}, title), actions ? h("div", { class: "actions" }, actions) : null)];
+  return [h("nav", { class: "crumbs", "aria-label": "위치" }, h("a", { href: "#summary" }, (S.branding && S.branding.product_name) || "Agent Hub"),
+      ...(crumbs || []).flatMap((c) => [h("span", { class: "sep" }, "/"), c])),
+    h("div", { class: "page-head" }, typeof title === "string" && pageIcon() ? h("span", { class: "ph-ic", "aria-hidden": "true" }, ic(pageIcon(), 20)) : null, h("h1", {}, title), actions ? h("div", { class: "actions" }, actions) : null)];
 }
 function renderPage(isUpdate) {
   if (!S) return;
   const page = route.page === "issue" ? lastPage : route.page;
   if (isUpdate && (busyTyping() || dragRun || pressing || $(".popover"))) return;  // 입력·끌기·팝오버 중에는 다시 그리지 않는다
   if (page === "automation") { if (isUpdate && flowMounted) return; return renderAutomation(); }
+  if (page === "assign") { if (isUpdate && $("#page").dataset.dirty === "1") return; return renderAssign($("#page")); }
+  if (page === "dept" || String(page).startsWith("dept/")) return renderDept($("#page"), route.page === "dept" ? route.id : String(page).slice(5), isUpdate);
   const root = $("#page");
   const y = window.scrollY;
   const fn = { tools: renderTools, make: renderMake, publish: renderPublish, summary: renderSummary, board: renderBoard, list: renderList, calendar: renderCalendar, inbox: renderInbox, agents: renderAgents, hr: renderHr, monitor: renderMonitor, activity: renderActivity, settings: renderSettings }[page] || renderSummary;
@@ -402,22 +438,25 @@ function renderSummary(root) {
     activityList([...S.events].reverse().slice(0, 7)));
 
   // 그룹 개요
-  const groups = h("div", { class: "grid g3" }, S.groups.map((g) => {
-    const active = g.agents.filter((a) => a.state === "active").length;
-    return h("a", { class: "card group-card", href: "#agents", style: "color:inherit;text-decoration:none" },
-      h("div", { class: "row" }, avatar(g.lead, "sq", "리드 " + g.lead), h("b", { class: "grow" }, g.title), h("span", { class: "lz " + (active ? "green" : "") }, `사용 중 ${active}/${g.agents.length}`)),
-      g.purpose ? h("div", { class: "small", style: "margin-top:8px" }, g.purpose) : null,
+  const groups = h("div", { class: "grid g4 dept-grid" }, S.groups.map((g) => {
+    const staffed = g.agents.filter((a) => a.state !== "planned").length;
+    const dr = deptRuns(g), wait = dr.filter((r) => OPEN.includes(r.status)).length, busy = dr.filter((r) => ["queued", "running", "validating"].includes(r.status)).length;
+    return h("a", { class: "card group-card dept-card", href: "#dept/" + g.id, style: "color:inherit;text-decoration:none" },
+      h("div", { class: "row" }, h("span", { class: "dept-ic sm" }, deptIcon(g)), h("b", { class: "grow" }, deptName(g)), busy ? h("span", { class: "lz green" }, `작업 중 ${busy}`) : null, wait ? h("span", { class: "lz yellow" }, `처리할 것 ${wait}`) : null),
+      h("div", { class: "small", style: "margin-top:6px" }, `에이전트 ${staffed}/${g.agents.length}명 · 워크플로우 ${(g.flow || []).length}단계 · 작업 ${dr.length}건`),
       h("div", { class: "agents" }, g.agents.slice(0, 9).map((a) => h("span", { style: a.state === "planned" ? "opacity:.45" : "" }, avatar(a.name, "", `${a.title} (${(AGENT_STATE[a.state] || [a.state])[0]})`)))));
   }));
 
   const cur = nowStep();
   const cnt = [S.runs.filter((r) => ["queued", "running", "validating"].includes(r.status)).length, count(["validation_failed", "error"]),
     count(["awaiting_approval"]), S.runs.filter((r) => r.status === "approved" && !postedIds().has(r.id)).length];
+  const openN = S.runs.filter((r) => OPEN.includes(r.status)).length;   // 승인함 「처리할 것」·옆 메뉴 배지와 같은 수
   const errs = runs.filter((r) => r.status === "error").slice(0, 3);
   const stepCards = h("div", { class: "grid g4 step-cards" }, STEPS.map((s, i) => h("a", { class: "card step-card" + (i === cur ? " now" : ""), href: "#" + s.page },
     h("div", { class: "row" }, h("span", { class: "sg-n" }, i + 1), h("b", {}, s.label), i === cur ? h("span", { class: "lz blue", style: "margin-left:auto" }, "지금") : null),
     h("div", { class: "small", style: "margin:8px 0" }, s.desc),
-    h("div", { class: "sc-n" }, [i === 0 ? `작업 중 ${cnt[0]}` : i === 1 ? `다시 만들 것 ${cnt[1]}` : i === 2 ? `승인 기다림 ${cnt[2]}` : `게시할 것 ${cnt[3]}`]))));
+    h("div", { class: "sc-n" }, [i === 0 ? `작업 중 ${cnt[0]}` : i === 1 ? `다시 만들 것 ${cnt[1]}` : i === 2 ? `처리할 것 ${openN}` : `게시할 것 ${cnt[3]}`]),
+    i === 2 && openN !== cnt[2] ? h("div", { class: "small" }, `승인 대기 ${cnt[2]} · 검수 실패 ${openN - cnt[2]}`) : null)));
   const nowCard = h("div", { class: "card now-card" }, h("div", { class: "small" }, "지금 할 단계"),
     h("h2", { style: "margin:4px 0 6px;font-size:22px" }, `${cur + 1}. ${STEPS[cur].label}`), h("div", { class: "muted" }, STEPS[cur].desc),
     h("a", { class: "btn primary", style: "margin-top:12px", href: "#" + STEPS[cur].page }, `${STEPS[cur].label} 하러 가기 →`));
@@ -425,10 +464,12 @@ function renderSummary(root) {
     h("ul", {}, errs.map((r) => h("li", {}, h("a", { href: "#issue/" + r.id }, keyOf(r)), " ", r.topic || "")) ), h("div", { class: "small" }, "눌러서 오류 내용을 보고 「같은 주제로 다시 만들기」를 누르세요."))) : null;
   const more = h("details", { class: "more-stats", open: store.get("moreStats", false) }, h("summary", {}, "현황 자세히 보기(건수·그래프·활동)"),
     stats, h("div", { class: "grid g2", style: "margin-top:16px" }, donut, load), h("div", { class: "grid g2", style: "margin-top:16px" }, feed, recentCard()),
-    h("h2", { class: "sec" }, "에이전트 그룹"), groups);
+  );
   more.addEventListener("toggle", () => store.set("moreStats", more.open));
   root.replaceChildren(...pageHead("오늘 할 일", [], [h("button", { class: "btn", onclick: () => refresh(true) }, ic("refresh", 16), "새로고침")]),
-    startCard(root), nowCard, errBox, h("h2", { class: "sec" }, "작업 순서"), stepCards, more);
+    startCard(root), h("div", { class: "row sec-row" }, h("h2", { class: "sec" }, "부서"), h("a", { class: "small", href: "#tools" }, "부서 관리")), groups,
+    h("div", { class: "dash-row" }, deptStatusChart(), trendChart()),
+    nowCard, errBox, h("h2", { class: "sec" }, "작업 순서"), stepCards, more);
   root.className = "page";
 }
 // 처음 쓰는 사람을 위한 「시작하기」 — 확인할 수 있는 건 자동으로, 나머지는 「했어요」로 표시
@@ -439,7 +480,7 @@ function startCard(root) {
   const steps = [
     { id: "demo", t: "시험 실행으로 승인 흐름 보기", d: "비용 없이 가짜 결과물로 보드·승인함을 확인합니다.", done: S.runs.length > 0, act: ["시험 실행", openCreate] },
     { id: "key", t: "Anthropic API 키 넣기", d: "설정 → 「API 키」에 키를 붙여 넣고 저장합니다. 키 하나로 모든 에이전트 비용이 집계됩니다.", done: (S.keys || []).some((k) => k.name === "ANTHROPIC_API_KEY" && k.set), act: ["설정 열기", () => go("settings")] },
-    { id: "real", t: "첫 실제 실행", d: "「만들기」 창에서 명령을 복사해 PC 터미널에서 실행합니다(비용 발생).", done: S.runs.some((r) => (r.cost_usd || 0) > 0), act: ["명령 만들기", openCreate] },
+    { id: "real", t: "부서에 첫 일 맡기기", d: "옆 메뉴의 부서(예: 인스타그램) → 「일 맡기기」 → 「지금 실행」. 결과는 승인함으로 갑니다(비용 발생).", done: S.runs.some((r) => (r.cost_usd || 0) > 0), act: ["일 맡기기", () => go("make")] },
     { id: "app", t: "앱으로 설치", d: "주소창 없는 창으로 열리고 작업 표시줄에 고정할 수 있습니다.", done: standalone || store.get("installed", false), act: installEvt ? ["설치", installApp] : ["방법 보기", () => go("settings")] },
     { id: "auto", t: "PC 켤 때 자동 실행", d: "autostart-on.bat 을 한 번 실행하면 서버가 창 없이 켜집니다.", manual: true },
   ];
@@ -481,7 +522,8 @@ function activityList(events, grouped) {
     for (const e of events) { const l = dayLabel(e.ts); if (l !== last) { out.push([l, []]); last = l; } out[out.length - 1][1].push(e); }
     return h("div", {}, out.map(([l, evs]) => [h("div", { class: "sb-sec", style: "padding:12px 0 0" }, l), activityList(evs)]));
   }
-  const KIND = { tool: ["tool", "도구", "#626F86"], blocked: ["shield", "차단", "#C9372C"], status: ["refresh", "상태", "#1D7AFC"] };
+  const KIND = { tool: ["tool", "도구", "#626F86"], blocked: ["shield", "차단", "#C9372C"], status: ["refresh", "상태", "#0C66E4"], schedule: ["clock", "예약 작업", "#6E5DC6"],
+    agent_start: ["play", "일 시작", "#1F845A"], agent_stop: ["check", "일 끝", "#1F845A"], turn_start: ["play", "작업 시작", "#626F86"], turn_end: ["check", "작업 끝", "#626F86"], hr: ["shield", "인사", "#943D73"] };
   return h("ul", { class: "feed" }, events.map((e) => {
     const [icon, label, color] = KIND[e.kind] || ["info", e.kind, "#626F86"];
     const detail = e.kind === "status" ? String(e.detail || "") : [e.tool, e.reason, e.detail].filter(Boolean).join(" · ");
@@ -497,7 +539,7 @@ function activityList(events, grouped) {
 function boardToolbar(onChange) {
   const accBtn = (v, label) => h("button", { class: "btn" + (ui.boardAccount === v ? " sel" : " subtle"), onclick: () => { ui.boardAccount = v; store.set("boardAccount", v); onChange(); } }, label);
   const agents = [...new Set(S.runs.map((r) => r.agent))];
-  const sinput = h("input", { class: "input", type: "search", placeholder: "이 보드 검색", value: query, "aria-label": "이 보드 검색",
+  const sinput = h("input", { class: "input page-search", type: "search", placeholder: "이 보드 검색", value: query, "aria-label": "이 보드 검색",
     oninput: (e) => { query = e.target.value; const q = $("#q"); if (q) q.value = query; onChange(); } });
   return h("div", { class: "toolbar" },
     h("label", { class: "search" }, ic("search", 16), sinput),
@@ -518,7 +560,7 @@ function renderBoard(root, isUpdate) {
   if (!isUpdate || !body) {
     body = h("div", { id: "board-body" });
     const tb = h("div", { id: "board-tb" });
-    root.replaceChildren(...pageHead("2. 진행 확인", [h("span", {}, "작업 보드")], [h("a", { class: "btn", href: "#make" }, ic("plus", 16), "만들기"), h("a", { class: "btn subtle", href: "#automation" }, ic("automation", 16), "자동화")]), stepGuide(1), tb, body);
+    root.replaceChildren(...pageHead("진행 보드", [h("span", {}, "진행 보드")], [h("a", { class: "btn", href: "#make" }, ic("plus", 16), "만들기"), h("a", { class: "btn subtle", href: "#automation" }, ic("automation", 16), "자동화")]), stepGuide(1), tb, body);
     root.className = "page";
   }
   const redraw = () => { $("#board-tb", root).replaceChildren(boardToolbar(redraw)); drawBoard(body); };
@@ -805,8 +847,8 @@ function monKpis(states) {
   const blockedToday = S.events.filter((e) => e.kind === "blocked" && (e.ts || "").startsWith(today)).length;
   const k = (label, v, color) => h("div", { class: "mon-k" }, h("b", { style: color ? `color:${color}` : "" }, v), h("span", {}, label));
   return h("div", { class: "mon-top" },
-    h("div", { class: "mon-pct" }, h("b", {}, pct.toFixed(1) + "%"), h("span", {}, `오늘 ${finished} / ${tRuns.length}건 끝남`)),
-    h("div", { class: "mon-bar" }, h("i", { style: `width:${pct}%` })),
+    h("div", { class: "mon-pct" }, h("b", {}, tRuns.length ? pct.toFixed(1) + "%" : "–"), h("span", {}, tRuns.length ? `오늘 ${finished} / ${tRuns.length}건 끝남` : "오늘 실행 없음")),
+    h("div", { class: "mon-bar" }, h("i", { style: `width:${tRuns.length ? pct : 0}%` })),
     h("div", { class: "mon-ks" },
       k("역할 배정", `${Object.values(states).filter((x) => x.st !== "planned").length} / ${Object.keys(states).length}`),
       k("사람 확인(오늘)", S.events.filter((e) => e.kind === "status" && (e.ts || "").startsWith(today) && /승인됨|반려됨/.test(e.detail || "")).length),
@@ -1024,16 +1066,16 @@ function renderList(root, isUpdate) {
   let body = $("#list-body", root);
   if (!isUpdate || !body) {
     body = h("div", { id: "list-body" });
-    const sinput = h("input", { class: "input", type: "search", placeholder: "목록 검색", value: query, "aria-label": "목록 검색",
+    const sinput = h("input", { class: "input page-search", type: "search", placeholder: "목록 검색", value: query, "aria-label": "목록 검색",
       oninput: (e) => { query = e.target.value; const q = $("#q"); if (q) q.value = query; drawList(body); } });
-    root.replaceChildren(...pageHead("목록", [], [h("button", { class: "btn", onclick: exportCsv, title: "보이는 목록을 CSV(엑셀)로 저장" }, ic("download", 16), "내보내기"), h("button", { class: "btn", onclick: openCreate }, ic("plus", 16), "시험 실행")]),
-      h("div", { class: "toolbar" }, h("label", { class: "search" }, ic("search", 16), sinput), h("span", { class: "small", id: "list-count" })), body);
+    root.replaceChildren(...pageHead("전체 작업", [], [h("button", { class: "btn", onclick: exportCsv, title: "보이는 목록을 CSV(엑셀)로 저장" }, ic("download", 16), "내보내기"), h("button", { class: "btn", onclick: openCreate }, ic("plus", 16), "시험 실행")]),
+      h("div", { class: "toolbar" }, h("label", { class: "search" }, ic("search", 16), sinput), listFilters(() => drawList(body)), h("span", { class: "small", id: "list-count" })), body);
     root.className = "page";
   }
   drawList(body);
 }
 function exportCsv() {
-  const runs = filtered(S.runs);
+  const runs = listFiltered(filtered(S.runs));
   const esc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
   const rows = [["키", "요약", "상태", "담당", "계정", "오류", "경고", "비용(USD)", "만든 시각", "실행 ID"]]
     .concat(runs.map((r) => [keyOf(r), r.topic, STATUS[r.status] || r.status, agentTitle[r.agent] || r.agent, r.account, r.errors, r.warnings, r.cost_usd == null ? "" : r.cost_usd, ts(r.created), r.id]));
@@ -1046,7 +1088,7 @@ function drawList(body) {
   const { key, dir } = ui.listSort;
   const col = LIST_COLS.find((c) => c.key === key) || LIST_COLS[8];
   const get = col.get || ((r) => String(r[col.key] || ""));
-  const runs = filtered(S.runs).sort((a, b) => (get(a) > get(b) ? 1 : get(a) < get(b) ? -1 : 0) * dir);
+  const runs = listFiltered(filtered(S.runs)).sort((a, b) => (get(a) > get(b) ? 1 : get(a) < get(b) ? -1 : 0) * dir);
   const cnt = $("#list-count"); if (cnt) cnt.textContent = `${runs.length}건`;
   if (!runs.length) { body.replaceChildren(emptyState(query ? "검색 결과가 없습니다" : "작업이 없습니다", query ? `「${query}」와 맞는 작업이 없습니다.` : "")); return; }
   const th = (c) => h("th", { class: c.sort === false ? "" : "sortable", "aria-sort": c.key === key ? (dir > 0 ? "ascending" : "descending") : null,
@@ -1083,7 +1125,7 @@ function renderInbox(root, isUpdate) {
   // 같은 건이 그대로면 오른쪽(입력 중인 메모 포함)은 다시 그리지 않는다
   const keep = isUpdate && prevSel === ui.inboxSel && selRun && prevStatus === selRun.status && $("#inbox-detail", root);
   const right = keep ? $("#inbox-detail", root) : detail;
-  root.replaceChildren(...pageHead("3. 승인하기", [h("span", {}, "승인함")], [h("span", { class: "small" }, "승인은 게시가 아니라 「게시 준비 완료」 표시입니다.")]), stepGuide(2),
+  root.replaceChildren(...pageHead("승인함", [h("span", {}, "승인함")], [h("span", { class: "small" }, "승인은 게시가 아니라 「게시 준비 완료」 표시입니다.")]), stepGuide(2),
     h("div", { class: "tabs", role: "tablist" }, tab("open", "처리할 것", all.filter((r) => OPEN.includes(r.status)).length), tab("done", "처리됨", all.filter((r) => done.includes(r.status)).length)),
     list.length ? h("div", { class: "queue" }, qlist, right) : emptyState(ui.inboxTab === "open" ? "처리할 결과물이 없습니다" : "처리된 기록이 없습니다", ui.inboxTab === "open" ? "에이전트가 만든 결과물이 검수를 마치면 여기에 모입니다." : ""));
   root.className = "page";
@@ -1118,6 +1160,7 @@ async function issueView(id, box, opt = {}) {
   left.append(...[
     h("div", { class: "crumbs" }, typeIcon(), h("span", { class: "key" }, keyOf(sum)), h("span", { class: "sep" }, "·"), h("span", {}, agentTitle[run.agent] || run.agent)),
     h("h1", { class: "it" }, pkg.topic || (run.params || {}).topic || "(주제 없음)"),
+    runPath(run, sum), runHighlights(run, sum),
     h("div", { class: "i-actions" },
       canDecide ? h("button", { class: "btn primary", disabled: run.status !== "awaiting_approval", title: run.status !== "awaiting_approval" ? "검수 오류가 있어 승인할 수 없습니다" : "게시 준비 완료로 표시", onclick: (e) => act("approve", e.currentTarget) }, ic("check", 16, 2.5), "승인") : null,
       canDecide ? h("button", { class: "btn", onclick: (e) => act("reject", e.currentTarget) }, ic("x", 16), "반려") : null,
@@ -1176,8 +1219,8 @@ async function issueView(id, box, opt = {}) {
 }
 function validationPanel(v, pkg) {
   if (!v.errors.length && !v.warnings.length) return h("div", { class: "msg ok" }, ic("ok", 20), h("div", {}, h("h4", {}, "규칙 검수 통과"), h("div", {}, "코드 검수기가 찾은 문제가 없습니다.")));
-  return [v.errors.length ? h("div", { class: "msg err", style: "margin-bottom:8px" }, ic("err", 20), h("div", {}, h("h4", {}, `오류 ${v.errors.length}건 — 승인 불가`), h("ul", {}, v.errors.map((e) => h("li", {}, h("b", {}, `[${e.rule}] `), e.msg))))) : null,
-    v.warnings.length ? h("div", { class: "msg warn" }, ic("warn", 20), h("div", {}, h("h4", {}, `경고 ${v.warnings.length}건 — 확인 필요`), h("ul", {}, v.warnings.map((e) => h("li", {}, h("b", {}, `[${e.rule}] `), e.msg))))) : null];
+  return [v.errors.length ? h("div", { class: "msg err", style: "margin-bottom:8px" }, ic("err", 20), h("div", {}, h("h4", {}, `오류 ${v.errors.length}건 — 승인 불가`), h("ul", {}, v.errors.map((e) => h("li", {}, h("b", { title: e.rule }, `[${ruleKo(e.rule)}] `), e.msg))))) : null,
+    v.warnings.length ? h("div", { class: "msg warn" }, ic("warn", 20), h("div", {}, h("h4", {}, `경고 ${v.warnings.length}건 — 확인 필요`), h("ul", {}, v.warnings.map((e) => h("li", {}, h("b", { title: e.rule }, `[${ruleKo(e.rule)}] `), e.msg))))) : null];
 }
 function stepper(flow, status) {
   const whoFor = { queued: "reels-maker", running: "reels-maker", error: "reels-maker", validating: "reels-validator", validation_failed: "reels-validator", awaiting_approval: "사람", rejected: "사람" };
@@ -1224,14 +1267,14 @@ function toggleBell() {
 }
 function toggleMe() {
   if ($(".popover.me")) { closePop(); return; }
-  const p = showPop($("#me").parentElement, [h("div", { class: "pop-h row" }, avatar("사람", "lg"), h("div", {}, h("div", {}, "나"), h("div", { class: "small" }, "승인 담당 · " + ((S.branding && S.branding.customer_name) || "")))),
+  const p = showPop($("#me").parentElement, [h("div", { class: "pop-h row" }, avatar("사람", "lg"), h("div", {}, h("div", {}, "나"), h("div", { class: "small" }, "승인 담당"))),
     h("div", { class: "pop-h" }, "테마"), h("div", { style: "padding:0 16px 8px" }, themePicker()),
     h("a", { class: "pop-item", href: "#settings", onclick: closePop }, ic("settings", 16), "프로젝트 설정"),
     h("a", { class: "pop-item", href: "#", onclick: (e) => { e.preventDefault(); closePop(); openShortcuts(); } }, ic("keyboard", 16), "단축키")], "me");
   p.style.width = "300px";
   p.addEventListener("click", (e) => e.stopPropagation());
 }
-document.addEventListener("click", (e) => { if (!e.target.closest(".popover") && !e.target.closest("#bell") && !e.target.closest("#me")) { for (const b of $$(".popover.bell, .popover.me")) b.remove(); } });
+document.addEventListener("click", (e) => { if (!e.target.closest(".popover") && !e.target.closest("#bell") && !e.target.closest("#me") && !e.target.closest("#tb-dept")) { for (const b of $$(".popover.bell, .popover.me, .popover.dept-pop")) b.remove(); } });
 
 // ---------- 모달 ----------
 function openModal(content, { size = "", onClose, label = "대화 상자", side = false } = {}) {
@@ -1286,7 +1329,7 @@ function makeTabs() {
 function renderMake(root) {
   const tools = runTools();
   if (!tools.length) {
-    root.replaceChildren(...pageHead("1. 만들기"), h("div", { class: "msg disc" }, ic("info", 20), h("div", { class: "grow" }, h("h4", {}, "켜진 도구가 없습니다"), h("div", {}, "「도구」에서 쓸 도구를 켜고 에이전트를 연결하세요."),
+    root.replaceChildren(...pageHead("일 맡기기"), h("div", { class: "msg disc" }, ic("info", 20), h("div", { class: "grow" }, h("h4", {}, "켜진 도구가 없습니다"), h("div", {}, "「도구」에서 쓸 도구를 켜고 에이전트를 연결하세요."),
       h("button", { class: "btn primary sm", style: "margin-top:8px", onclick: () => go("tools") }, "도구로 가기"))));
     root.className = "page"; return;
   }
@@ -1294,11 +1337,33 @@ function renderMake(root) {
   if (!tools.some((t) => t.id === ui.makeTool)) ui.makeTool = tools[0].id;
   if (ui.makeTool !== "instagram") return renderMakeGeneric(root, TOOL[ui.makeTool]);
   if (!Object.keys(ACCOUNTS).length) {
-    root.replaceChildren(...pageHead("1. 만들기"), stepGuide(0), makeTabs(), h("div", { class: "msg disc" }, ic("info", 20), h("div", { class: "grow" }, h("h4", {}, "인스타그램 계정을 먼저 등록하세요"),
+    root.replaceChildren(...pageHead("일 맡기기"), stepGuide(0), makeTabs(), h("div", { class: "msg disc" }, ic("info", 20), h("div", { class: "grow" }, h("h4", {}, "인스타그램 계정을 먼저 등록하세요"),
       h("div", {}, "「도구 → 인스타그램」에서 계정 ID·이름·음성 여부를 넣으면 여기서 고를 수 있습니다."), h("button", { class: "btn primary sm", style: "margin-top:8px", onclick: () => go("tools") }, "도구로 가기"))));
     root.className = "page"; return;
   }
   return renderMakeInsta(root);
+}
+// 「② 실제로 만들기」: 관리 화면에서 바로 실행(확인 후) + 명령으로 실행하는 방법은 접어 둠
+function runNowBlock(title, getBody, cmd, help) {
+  const btn = h("button", { class: "btn primary", onclick: async () => {
+    const body = getBody();
+    if (!String(body.topic || "").trim()) return flag("err", "주제를 적어 주세요", "무엇을 만들지 적어야 에이전트가 시작합니다.");
+    if (!confirm(`실제로 에이전트를 실행합니다(API 비용 발생).\n\n${body.topic}\n\n결과는 3단계 승인함으로 갑니다. 시작할까요?`)) return;
+    btn.disabled = true;
+    const r = await api("/api/run", body);
+    if (r.ok) { flag("ok", "실행을 시작했습니다", "몇 분 뒤 2단계 「진행 확인」에 나타나고, 끝나면 승인함으로 갑니다."); setTimeout(() => { refresh(true); go("board"); }, 800); }
+    else { flag("err", "시작하지 못했습니다", r.data.error || "실패"); btn.disabled = false; }
+  } }, ic("play", 16), "지금 실행");
+  return [h("h3", { class: "sub" }, title),
+    h("div", { class: "small", style: "margin-bottom:8px" }, "누르면 이 PC의 관리 화면이 에이전트를 바로 부릅니다. API 비용이 들고, 하루 한도를 넘으면 멈춥니다."),
+    h("div", { class: "row" }, btn),
+    h("div", { class: "help" }, help),
+    h("details", { class: "how-cmd", style: "margin-top:12px" }, h("summary", { class: "small" }, "명령으로 실행하기(cmd 창)"),
+      h("ol", { class: "how" },
+        h("li", {}, "파일 탐색기에서 Agent Hub 설치 폴더를 엽니다."),
+        h("li", {}, "위쪽 주소창을 눌러 cmd 라고 치고 Enter — 그 폴더에서 검은 창이 열립니다."),
+        h("li", {}, "아래 명령을 복사해 붙여 넣고 Enter. 끝나면 2단계에 나타납니다.")),
+      cmd, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cmd.textContent).then(() => flag("ok", "명령을 복사했습니다", "cmd 창에 붙여 넣으세요(오른쪽 클릭 또는 Ctrl+V)."), () => {}) }, ic("copy", 16), "명령 복사")))];
 }
 function renderMakeGeneric(root, t) {
   const pre = remake || {}; remake = null;
@@ -1325,17 +1390,14 @@ function renderMakeGeneric(root, t) {
   const agentOk = (t.agents || []).includes(run.agent);
   const demo = async (btn, scen) => { btn.disabled = true; const r = await api("/api/demo", { scenario: scen, tool: t.id, topic: inputs.topic ? inputs.topic.value : "" });
     if (r.ok) { flag("ok", "시험 실행을 시작했습니다", "2단계 「진행 확인」에서 볼 수 있어요."); setTimeout(() => { refresh(true); go("board"); }, 800); } else { flag("err", "시작하지 못했습니다", r.data.error || "실패"); btn.disabled = false; } };
-  root.replaceChildren(...pageHead("1. 만들기", [h("span", {}, t.name)]), stepGuide(0), makeTabs(),
+  root.replaceChildren(...pageHead("일 맡기기", [h("span", {}, t.name)]), stepGuide(0), makeTabs(),
     h("div", { class: "grid g2 make-grid" },
       h("div", { class: "card" }, h("h3", { class: "sub" }, "① 무엇을 맡길까"), ...fields,
         h("div", { class: "small" }, `맡을 에이전트: ${agentTitle[run.agent] || run.agent}`, agentOk ? null : h("span", { class: "lz red", style: "margin-left:6px" }, "연결 안 됨 — 「도구」에서 연결"))),
-      h("div", { class: "card" }, h("h3", { class: "sub" }, "② 실제로 맡기기(비용 발생)"),
-        h("ol", { class: "how" },
-          h("li", {}, "파일 탐색기에서 Agent Hub 설치 폴더를 엽니다."),
-          h("li", {}, "위쪽 주소창을 눌러 cmd 라고 치고 Enter — 그 폴더에서 검은 창이 열립니다."),
-          h("li", {}, "아래 명령을 복사해 붙여 넣고 Enter. 끝나면 2단계에 나타납니다.")),
-        cmd, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn primary", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cmd.textContent).then(() => flag("ok", "명령을 복사했습니다", "cmd 창에 붙여 넣으세요."), () => {}) }, ic("copy", 16), "명령 복사")),
-        h("div", { class: "help" }, `결과는 문서(${run.output || "result.md"})로 나오고, 3단계에서 승인합니다. 제출·게시·결제는 사람이 합니다.`),
+      h("div", { class: "card" }, ...runNowBlock("② 실제로 맡기기(비용 발생)",
+          () => ({ tool: t.id, topic: inputs.topic ? inputs.topic.value.trim() : Object.values(inputs).map((el) => el.value.trim()).find(Boolean) || "",
+            params: Object.fromEntries(Object.entries(inputs).filter(([k]) => k !== "topic").map(([k, el]) => [k, el.value.trim()])) }),
+          cmd, `결과는 문서(${run.output || "result.md"})로 나오고, 3단계에서 승인합니다. 제출·게시·결제는 사람이 합니다.`),
         h("h3", { class: "sub", style: "margin-top:20px" }, "③ 먼저 시험해 보기(비용 없음)"),
         h("div", { class: "row" }, h("button", { class: "btn", onclick: (e) => demo(e.currentTarget, "ok") }, "통과 예시로 시험"), h("button", { class: "btn subtle", onclick: (e) => demo(e.currentTarget, "bad") }, "검수 실패 예시로 시험")))));
   root.className = "page";
@@ -1356,20 +1418,16 @@ function renderMakeInsta(root) {
       h("button", { class: "btn sm", style: "margin-top:8px", onclick: () => { series.value = it.topic; topic.value = it.title || `${it.topic} ${it.type}`; upd(); } }, "이 계획으로 채우기")))); } catch {} })();
   const demo = async (btn, scen) => { btn.disabled = true; const r = await api("/api/demo", { scenario: scen, account: acc.value, series: series.value, type: type.value });
     if (r.ok) { flag("ok", "시험 실행을 시작했습니다", "2단계 「진행 확인」에서 볼 수 있어요."); setTimeout(() => { refresh(true); go("board"); }, 800); } else { flag("err", "시작하지 못했습니다", r.data.error || "실패"); btn.disabled = false; } };
-  root.replaceChildren(...pageHead("1. 만들기", [h("span", {}, "인스타그램 릴스")]), stepGuide(0), makeTabs(),
+  root.replaceChildren(...pageHead("일 맡기기", [h("span", {}, "인스타그램 릴스")]), stepGuide(0), makeTabs(),
     h("div", { class: "grid g2 make-grid" },
       h("div", { class: "card" }, h("h3", { class: "sub" }, "① 무엇을 만들까"),
         h("div", { class: "grid g2", style: "gap:0 16px" }, h("div", { class: "field" }, h("label", { for: "m-acc" }, "계정"), acc), h("div", { class: "field" }, h("label", { for: "m-type" }, "유형"), type)),
         h("div", { class: "field" }, h("label", { for: "m-series" }, "시리즈"), series),
         h("div", { class: "field" }, h("label", { for: "m-topic" }, "주제"), topic, h("div", { class: "help" }, "오늘 급상승 뉴스나 캘린더 계획에서 고릅니다. 첫 화면 후킹은 「내가 ○○ 안 하면 / ○○ 당해요」 형식으로 에이전트가 만듭니다.")),
         plan),
-      h("div", { class: "card" }, h("h3", { class: "sub" }, "② 실제로 만들기(비용 발생)"),
-        h("ol", { class: "how" },
-          h("li", {}, "파일 탐색기에서 Agent Hub 설치 폴더를 엽니다."),
-          h("li", {}, "위쪽 주소창을 눌러 cmd 라고 치고 Enter — 그 폴더에서 검은 창이 열립니다."),
-          h("li", {}, "아래 명령을 복사해 붙여 넣고 Enter. 몇 분 뒤 2단계에 나타납니다.")),
-        cmd, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn primary", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cmd.textContent).then(() => flag("ok", "명령을 복사했습니다", "cmd 창에 붙여 넣으세요(오른쪽 클릭 또는 Ctrl+V)."), () => {}) }, ic("copy", 16), "명령 복사")),
-        h("div", { class: "help" }, ".env 에 API 키가 있어야 합니다. 하루 한도를 넘으면 실행이 멈춥니다."),
+      h("div", { class: "card" }, ...runNowBlock("② 실제로 만들기(비용 발생)",
+          () => ({ tool: "instagram", account: acc.value, series: series.value.trim(), type: type.value, topic: topic.value.trim() }),
+          cmd, "API 키는 프로젝트 설정 → 「API 키」에 넣습니다. 결과는 3단계 승인함으로 가고, 게시·예약은 사람이 인스타 「콘텐츠 예약」으로 합니다."),
         h("h3", { class: "sub", style: "margin-top:20px" }, "③ 먼저 시험해 보기(비용 없음)"),
         h("div", { class: "small", style: "margin-bottom:8px" }, "에이전트를 부르지 않고 가짜 결과물로 2~4단계 흐름을 확인합니다."),
         h("div", { class: "row" }, h("button", { class: "btn", onclick: (e) => demo(e.currentTarget, "ok") }, "통과 예시로 시험"), h("button", { class: "btn subtle", onclick: (e) => demo(e.currentTarget, "bad") }, "검수 실패 예시로 시험")))));
@@ -1396,7 +1454,7 @@ function kmongView(pkg) {
 
 // ---------- 도구(판매 단위): 켜기·끄기, 에이전트 연결, 도구 설정 ----------
 ui.tools = { open: store.get("toolOpen", "instagram") };
-function renderTools(root, isUpdate) {
+function renderTools(root, isUpdate, only) {   // only = 도구 ID: 부서 화면 「설정」 탭에 그 부서 카드 하나만(펼쳐서)
   if (isUpdate && root.dataset.dirty === "1") return;   // 고치는 중이면 다시 그리지 않음
   root.dataset.dirty = "";
   const lic = S.license || {};
@@ -1404,9 +1462,9 @@ function renderTools(root, isUpdate) {
   const shared = (S.groups.find((g) => g.id === "shared") || { agents: [] }).agents.map((a) => a.name);
   const post = async (url, body, okMsg) => { const r = await api(url, body); if (r.ok) { if (okMsg) flag("ok", okMsg, ""); root.dataset.dirty = ""; refresh(true); } else flag("err", "저장하지 못했습니다", r.data.error || "실패"); return r; };
   const card = (t) => {
-    const open = ui.tools.open === t.id;
+    const open = only ? true : ui.tools.open === t.id;
     const st = t.core ? ["기본 포함", "blue"] : !t.entitled ? ["요금제에 없음", ""] : t.enabled ? ["켜짐", "green"] : ["꺼짐", ""];
-    const head = h("button", { class: "tool-h", "aria-expanded": String(open), onclick: () => { ui.tools.open = open ? "" : t.id; store.set("toolOpen", ui.tools.open); renderTools(root); } },
+    const head = h("button", { class: "tool-h", "aria-expanded": String(open), onclick: () => { if (only) return; ui.tools.open = open ? "" : t.id; store.set("toolOpen", ui.tools.open); renderTools(root); } },
       h("span", { class: "tool-ic", "aria-hidden": "true" }, t.icon || "🧩"),
       h("span", { class: "grow", style: "min-width:0;text-align:left" }, h("b", {}, t.name), t.beta ? h("span", { class: "lz purple", style: "margin-left:6px" }, "베타") : null,
         h("div", { class: "small ellipsis" }, t.summary)),
@@ -1435,8 +1493,9 @@ function renderTools(root, isUpdate) {
     return h("section", { class: "card flat tool-card open" }, head, h("div", { class: "tool-b" }, ...body.flat().filter(Boolean)));
   };
   const planLine = lic.plan ? `요금제: ${{ trial: "평가판", starter: "스타터", pro: "프로", team: "팀", legacy: "판매자용" }[lic.plan] || lic.plan}` : "";
-  root.replaceChildren(...pageHead("도구", [h("span", {}, "도구를 켜고, 일할 에이전트를 연결합니다")], [h("span", { class: "small" }, planLine)]),
-    h("div", { class: "msg disc", style: "margin-bottom:16px" }, ic("info", 20), h("div", {}, "도구 = 인스타그램·웹소설 같은 일의 묶음(규칙·검수기·스킬 포함). 에이전트 = 일하는 직원. 도구에 에이전트를 연결해야 그 일을 맡길 수 있습니다. 요금제에 든 도구만 켤 수 있습니다.")),
+  if (only) { const t = (S.tools || []).find((x) => x.id === only); root.replaceChildren(t ? card(t) : emptyState("설정이 없는 부서입니다", "")); return; }
+  root.replaceChildren(...pageHead("부서 관리", [h("span", {}, "부서를 켜고, 일할 에이전트를 배치합니다")], [h("span", { class: "small" }, planLine)]),
+    h("div", { class: "msg disc", style: "margin-bottom:16px" }, ic("info", 20), h("div", {}, "부서 = 인스타그램·웹소설 같은 업무 단위(규칙·검수기·스킬·워크플로우 포함). 에이전트 = 일하는 직원. 부서에 에이전트를 배치하면 그 부서의 워크플로우 단계를 맡습니다. 요금제에 든 부서만 켤 수 있습니다.")),
     ...(S.tools || []).map(card));
   root.className = "page narrow";
 }
@@ -1507,7 +1566,7 @@ async function renderPublish(root, isUpdate) {
     })();
     return box;
   };
-  root.replaceChildren(...pageHead("4. 게시하기", [h("span", {}, "인스타 콘텐츠 예약")]), stepGuide(3),
+  root.replaceChildren(...pageHead("게시", [h("span", {}, "인스타 콘텐츠 예약")]), stepGuide(3),
     h("div", { class: "card", style: "margin-bottom:16px" }, h("h3", { class: "sub" }, "올리는 순서(인스타 앱, 직접)"),
       h("ol", { class: "how" },
         h("li", {}, "프로필 ☰ → 프로페셔널 대시보드 → 모범사례 → 도달 → 카메라 버튼으로 릴스 올리기(+ 버튼 말고)."),
@@ -1573,12 +1632,96 @@ function flag(kind, title, text) {
 }
 
 // ---------- 자동화(흐름 편집기) ----------
+ui.auto = { tab: store.get("autoTab", "sched"), edit: null };
 function renderAutomation() {
-  flowMounted = true;
   const root = $("#page"); root.className = "page"; root.style.maxWidth = "none";
+  const tabs = h("div", { class: "btn-group" }, [["sched", "예약 작업"], ["flow", "흐름(워크플로우)"]].map(([k, l]) =>
+    h("button", { class: "btn" + (ui.auto.tab === k ? " sel" : " subtle"), onclick: () => { ui.auto.tab = k; store.set("autoTab", k); flowMounted = false; renderAutomation(); } }, l)));
   const host = h("div");
-  root.replaceChildren(...pageHead("자동화", [h("span", {}, "워크플로우")], [h("span", { class: "small" }, "AI가 노드를 만들고, 상자를 끌어 고칠 수 있습니다.")]), host);
-  FlowEditor.mount(host, S, () => refresh(true));
+  if (ui.auto.tab === "flow") {
+    flowMounted = true;
+    root.replaceChildren(...pageHead("자동화", [h("span", {}, "워크플로우")], [tabs, h("span", { class: "small" }, "AI가 노드를 만들고, 상자를 끌어 고칠 수 있습니다.")]), host);
+    FlowEditor.mount(host, S, () => refresh(true), {});
+    return;
+  }
+  flowMounted = false;
+  root.replaceChildren(...pageHead("자동화", [h("span", {}, "예약 작업")], [tabs, h("button", { class: "btn primary", onclick: () => { ui.auto.edit = {}; renderAutomation(); } }, ic("plus", 16), "예약 작업 추가")]), host);
+  renderSchedules(host);
+}
+// ---------- 예약 작업(자동으로 도는 일 모아 보기) ----------
+const CRON_PRESETS = [["매일", "{m} {h} * * *"], ["평일", "{m} {h} * * 1-5"], ["주말", "{m} {h} * * 0,6"], ["매주 월요일", "{m} {h} * * 1"], ["매시간", "{m} * * * *"], ["3시간마다", "{m} */3 * * *"], ["직접(cron)", ""]];
+function renderSchedules(host) {
+  const SC = S.schedules || { jobs: [], areas: {}, where: {} };
+  const jobs = SC.jobs.slice().sort((a, b) => (a.area > b.area) - (a.area < b.area) || (a.next_run || "z").localeCompare(b.next_run || "z"));
+  const stCls = { ok: "green", approved: "green", awaiting_approval: "yellow", validation_failed: "red", error: "red", skipped: "" };
+  const stKo = { ok: "성공", awaiting_approval: "승인 대기로 올라감", validation_failed: "검수 실패", error: "오류", skipped: "건너뜀", approved: "승인됨" };
+  const editor = ui.auto.edit ? scheduleEditor(ui.auto.edit, SC, host) : null;
+  const groups = {};
+  for (const j of jobs) (groups[j.area] = groups[j.area] || []).push(j);
+  const list = Object.keys(groups).length ? Object.entries(groups).map(([area, js]) => h("section", { class: "card", style: "margin-bottom:16px;padding:0" },
+    h("div", { class: "card-h", style: "padding:12px 16px 0" }, h("h3", {}, SC.areas[area] || area), h("span", { class: "small" }, `${js.length}개`)),
+    h("table", { class: "t sched" }, h("thead", {}, h("tr", {}, ["작업", "언제", "다음 실행", "어디서", "마지막 실행", ""].map((t) => h("th", {}, t)))),
+      h("tbody", {}, js.map((j) => h("tr", { class: j.enabled ? "" : "off" },
+        h("td", {}, h("b", {}, j.name), h("div", { class: "small" }, j.where === "hub" ? `${toolName(j.tool)} · ${agentTitle[j.agent] || j.agent}${j.params && j.params.topic ? " · " + j.params.topic : ""}${j.dry_run ? " · 시험 실행" : ""}` : j.command || j.note || ""), h("div", { class: "small mono" }, j.id)),
+        h("td", { class: "nowrap" }, j.when, h("div", { class: "small mono" }, j.cron)),
+        h("td", { class: "nowrap" }, j.enabled ? (j.next_run ? j.next_run.replace("T", " ").slice(5) : "-") : h("span", { class: "lz" }, "꺼짐")),
+        h("td", { class: "nowrap" }, h("span", { class: "lz " + (j.where === "hub" ? "blue" : "") }, j.where_name)),
+        h("td", {}, j.last_run ? [h("span", { class: "lz " + (stCls[j.last_status] || "") }, stKo[j.last_status] || j.last_status), h("div", { class: "small" }, ago(j.last_run) + (j.last_note ? " · " + j.last_note : ""))] : h("span", { class: "small" }, "기록 없음")),
+        h("td", { class: "nowrap" },
+          j.where === "hub" ? h("button", { class: "btn sm", onclick: async () => { const r = await api(`/api/schedules/${j.id}/run`, {}); flag(r.ok ? "ok" : "err", r.ok ? `「${j.name}」 실행` : "실행하지 못했습니다", r.data.message || r.data.error || ""); refresh(true); } }, "지금 실행") : null,
+          h("button", { class: "btn sm subtle", onclick: () => { ui.auto.edit = { ...j }; renderAutomation(); } }, "고치기"),
+          h("button", { class: "btn sm subtle", onclick: async () => { const r = await api("/api/schedules", { ...j, enabled: !j.enabled }); if (r.ok) { S.schedules = r.data.schedules; renderAutomation(); } } }, j.enabled ? "끄기" : "켜기"))))))))
+    : [h("div", { class: "card" }, emptyState("예약 작업이 없습니다", "「예약 작업 추가」로 매일·평일·매주 도는 일을 넣으세요. 관리 화면이 직접 돌리는 일(결과는 승인함으로)과 다른 곳(Claude 예약 작업·Windows 작업 스케줄러 등)에서 도는 자동화를 한곳에 모아 봅니다."))];
+  host.replaceChildren(
+    h("div", { class: "small", style: "margin:-8px 0 16px" }, "관리 화면이 실행하는 작업은 이 PC의 관리 화면이 켜져 있을 때 시간에 맞춰 돌고, 결과는 늘 승인함으로 갑니다(게시·제출은 사람이). 다른 곳에서 도는 자동화는 그쪽 스크립트 끝에 ",
+      h("code", {}, "python scripts/report_run.py <작업 ID> ok \"메모\""), " 한 줄을 넣으면 실행 기록이 여기에 들어옵니다."),
+    editor, ...list);
+}
+function scheduleEditor(j, SC, host) {
+  const isNew = !j.id;
+  const f = { name: j.name || "", area: j.area || "insta", where: j.where || "hub", cron: j.cron || "30 8 * * *", tool: j.tool || ((runTools()[0] || {}).id || "instagram"), agent: j.agent || "",
+    topic: (j.params || {}).topic || "", account: (j.params || {}).account || "", dry_run: !!j.dry_run, note: j.note || "", command: j.command || "", enabled: j.enabled !== false };
+  const m = /^(\d+) (\d+|\*|\*\/3) /.exec(f.cron) || [];
+  let hh = /^\d+$/.test(m[2] || "") ? String(m[2]).padStart(2, "0") : "08", mm = String(m[1] || "30").padStart(2, "0");
+  const preset = CRON_PRESETS.find(([, t]) => t && t.replace("{m}", +mm).replace("{h}", +hh) === f.cron) || CRON_PRESETS[CRON_PRESETS.length - 1];
+  const inp = (k, attrs = {}) => h("input", { class: "input", value: f[k], oninput: (e) => { f[k] = e.target.value; }, ...attrs });
+  const cronIn = inp("cron", { style: "font-family:var(--mono)" });
+  const time = h("input", { class: "input", type: "time", value: `${hh}:${mm}`, style: "width:120px" });
+  const pre = h("select", { class: "input", style: "width:140px" }, CRON_PRESETS.map(([l]) => h("option", { selected: l === preset[0] }, l)));
+  const sync = () => { const p = CRON_PRESETS.find(([l]) => l === pre.value); const [H, M] = time.value.split(":"); if (p && p[1]) { f.cron = p[1].replace("{m}", +M).replace("{h}", +H); cronIn.value = f.cron; } cronIn.disabled = !!(p && p[1]); };
+  pre.onchange = sync; time.onchange = sync; setTimeout(sync, 0);
+  const where = h("select", { class: "input", onchange: (e) => { f.where = e.target.value; hubBox.hidden = f.where !== "hub"; extBox.hidden = f.where === "hub"; } }, Object.entries(SC.where).map(([k, l]) => h("option", { value: k, selected: f.where === k }, l)));
+  const tools = runTools().map((t) => t.id);
+  const toolSel = h("select", { class: "input", onchange: (e) => { f.tool = e.target.value; } }, tools.map((t) => h("option", { value: t, selected: f.tool === t }, toolName(t))));
+  const hubBox = h("div", { class: "grid g3", hidden: f.where !== "hub" },
+    h("label", { class: "field" }, h("span", {}, "도구"), toolSel),
+    h("label", { class: "field" }, h("span", {}, "주제(비우면 에이전트가 정함, {date}=오늘 날짜)"), inp("topic", { placeholder: "예: {date} 급상승 주제로 릴스 1편" })),
+    h("label", { class: "field" }, h("span", {}, "계정(인스타만)"), inp("account", { placeholder: "예: 계정 ID" })),
+    h("label", { class: "row small", style: "cursor:pointer" }, h("input", { type: "checkbox", checked: f.dry_run, onchange: (e) => { f.dry_run = e.target.checked; } }), "시험 실행(비용 없음, 가짜 결과)"));
+  const extBox = h("div", { class: "grid g2", hidden: f.where === "hub" },
+    h("label", { class: "field" }, h("span", {}, "무엇을 돌리나(명령·작업 이름)"), inp("command", { placeholder: "예: Cowork 「매일 릴스 조사」 / python tools\\daily.py" })));
+  const save = async () => {
+    const body = { id: j.id, name: f.name, area: f.area, where: f.where, cron: f.cron, enabled: f.enabled, note: f.note, command: f.command };
+    if (f.where === "hub") Object.assign(body, { tool: f.tool, agent: f.agent, dry_run: f.dry_run, params: Object.fromEntries(Object.entries({ topic: f.topic, account: f.account }).filter(([, v]) => v)) });
+    const r = await api("/api/schedules", body);
+    if (!r.ok) return flag("err", "저장하지 못했습니다", r.data.error || "");
+    S.schedules = r.data.schedules; ui.auto.edit = null; flag("ok", isNew ? "예약 작업을 추가했습니다" : "고쳤습니다", r.data.job ? `${r.data.job.name}` : ""); renderAutomation();
+  };
+  return h("section", { class: "card sched-edit", style: "margin-bottom:16px" },
+    h("div", { class: "card-h" }, h("h3", {}, isNew ? "예약 작업 추가" : "예약 작업 고치기")),
+    h("div", { class: "grid g3" },
+      h("label", { class: "field" }, h("span", {}, "이름"), inp("name", { placeholder: "예: 매일 아침 릴스 초안" })),
+      h("label", { class: "field" }, h("span", {}, "분야"), h("select", { class: "input", onchange: (e) => { f.area = e.target.value; } }, Object.entries(SC.areas).map(([k, l]) => h("option", { value: k, selected: f.area === k }, l)))),
+      h("label", { class: "field" }, h("span", {}, "어디서 도나"), where)),
+    h("div", { class: "row", style: "gap:8px;margin:8px 0;flex-wrap:wrap;align-items:flex-end" },
+      h("label", { class: "field" }, h("span", {}, "반복"), pre), h("label", { class: "field" }, h("span", {}, "시각"), time),
+      h("label", { class: "field grow" }, h("span", {}, "cron(분 시 일 월 요일)"), cronIn)),
+    hubBox, extBox,
+    h("label", { class: "field" }, h("span", {}, "메모"), inp("note")),
+    h("div", { class: "row", style: "justify-content:flex-end;gap:8px" },
+      !isNew ? h("button", { class: "btn subtle", onclick: async () => { if (!confirm(`「${j.name}」 예약 작업을 지울까요?`)) return; const r = await api(`/api/schedules/${j.id}/delete`, {}); if (r.ok) { S.schedules = r.data.schedules; ui.auto.edit = null; renderAutomation(); } } }, "지우기") : null,
+      h("button", { class: "btn", onclick: () => { ui.auto.edit = null; renderAutomation(); } }, "취소"),
+      h("button", { class: "btn primary", onclick: save }, "저장")));
 }
 
 // ---------- 에이전트 ----------
@@ -1591,7 +1734,8 @@ function renderAgents(root) {
     const closed = ui.closedGroups.includes(g.id);
     const active = g.agents.filter((a) => a.state === "active").length;
     tbody.append(h("tr", { class: "grp" + (closed ? " closed" : ""), onclick: () => { ui.closedGroups = closed ? ui.closedGroups.filter((x) => x !== g.id) : [...ui.closedGroups, g.id]; store.set("closedGroups", ui.closedGroups); renderAgents(root); } },
-      h("td", { colspan: "6" }, h("span", { class: "chev" }, ic("chevD", 14, 2.5)), g.title, h("span", { class: "small", style: "margin-left:8px;font-weight:400" }, `사용 중 ${active} / ${g.agents.length} · 리드 ${agentTitle[g.lead] || g.lead}`))));
+      h("td", { colspan: "6" }, h("span", { class: "chev" }, ic("chevD", 14, 2.5)), g.title, h("span", { class: "small", style: "margin-left:8px;font-weight:400" },
+        [`${g.agents.length}명`, `사용 중 ${active}`, ...["ready", "optional", "planned"].map((k) => [k, g.agents.filter((a) => a.state === k).length]).filter(([, n]) => n).map(([k, n]) => `${AGENT_STATE[k][0]} ${n}`), `리드 ${agentTitle[g.lead] || g.lead}`].join(" · ")))));
     if (closed) continue;
     const shown = g.agents.filter((a) => ui.showPlanned || a.state !== "planned");
     for (const a of shown) {
@@ -1600,10 +1744,10 @@ function renderAgents(root) {
       tbody.append(h("tr", { class: "click", tabindex: "0", title: "자세히 보기", onclick: () => openAgent(a, g), onkeydown: (e) => { if (e.key === "Enter") openAgent(a, g); } },
         h("td", {}, h("div", { class: "agent-name" }, avatar(a.name, "lg"), h("div", {}, h("b", {}, a.title, a.name === g.lead ? h("span", { class: "lz purple", style: "margin-left:6px" }, "리드") : null), h("small", {}, a.name)))),
         h("td", { class: "nowrap" }, h("span", { class: "lz " + st[1] }, st[0])),
-        h("td", { style: "min-width:220px" }, a.role),
+        h("td", { style: "min-width:220px" }, h("div", { class: "clamp2", title: a.role }, a.role)),
         h("td", { class: "small", style: "min-width:160px" }, a.tools),
         h("td", { class: "small", style: "min-width:160px" }, a.forbidden),
-        h("td", { class: "nowrap" }, counts.length ? counts.map(([k, n]) => h("div", {}, lz(k), " ", n)) : h("span", { class: "small" }, "실행 없음"))));
+        h("td", {}, counts.length ? h("div", { class: "run-chips" }, h("b", {}, `${counts.reduce((x, [, n]) => x + n, 0)}건`), counts.map(([k, n]) => h("span", { class: "nowrap" }, lz(k), " ", n))) : h("span", { class: "small nowrap" }, "실행 없음"))));
     }
     const hidden = g.agents.length - shown.length;
     if (hidden) tbody.append(h("tr", {}, h("td", { colspan: "6", class: "small" }, `예정 ${hidden}개 숨김: ` + g.agents.filter((a) => a.state === "planned").map((a) => a.title).join(" · "))));
@@ -1611,8 +1755,8 @@ function renderAgents(root) {
   root.replaceChildren(...pageHead("에이전트", [], [toggle]),
     h("div", { class: "grid g4", style: "margin-bottom:16px" },
       h("div", { class: "card stat" }, h("span", { class: "ic" }, ic("agents", 20)), h("div", {}, h("b", {}, total), h("span", {}, "정의된 에이전트"))),
-      h("div", { class: "card stat" }, h("span", { class: "ic", style: "background:var(--success-bg);color:var(--success-text)" }, ic("ok", 20)), h("div", {}, h("b", {}, totalActive), h("span", {}, "사용 중"))),
-      h("div", { class: "card stat" }, h("span", { class: "ic" }, ic("board", 20)), h("div", {}, h("b", {}, S.groups.length), h("span", {}, "그룹"))),
+      h("div", { class: "card stat" }, h("span", { class: "ic", style: "background:var(--success-bg);color:var(--success-text)" }, ic("ok", 20)), h("div", {}, h("b", {}, totalActive), h("span", {}, `사용 중 · 준비됨 ${S.groups.reduce((a, g) => a + g.agents.filter((x) => x.state === "ready").length, 0)}`))),
+      h("div", { class: "card stat" }, h("span", { class: "ic" }, ic("board", 20)), h("div", {}, h("b", {}, S.groups.length), h("span", {}, "팀"))),
       h("div", { class: "card stat" }, h("span", { class: "ic", style: "background:var(--danger-bg);color:var(--danger-text)" }, ic("shield", 20)), h("div", {}, h("b", {}, S.events.filter((e) => e.kind === "blocked").length), h("span", {}, "최근 훅 차단")))),
     h("div", { class: "table-wrap" }, h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["에이전트", "상태", "역할", "도구", "금지", "실행"].map((x) => h("th", {}, x)))), tbody)));
   root.className = "page";
@@ -1629,6 +1773,7 @@ function openAgent(a, g) {
       h("button", { class: "tb-icon x", "aria-label": "닫기", onclick: () => closeModal() }, ic("x", 20))),
     h("div", { class: "modal-b" },
       h("div", { class: "row", style: "margin-bottom:16px" }, h("span", { class: "lz " + st[1] }, st[0]), a.name === g.lead ? h("span", { class: "lz purple" }, "리드") : null, h("span", { class: "tag" }, g.title)),
+      agentHighlights(a, runs, cost),
       h("h4", { class: "sub" }, "역할"), h("p", { style: "margin-top:0" }, a.role),
       h("div", { class: "details", style: "margin:16px 0" }, h("dl", {},
         field("도구", a.tools || "-"), field("금지", a.forbidden || "-"),
@@ -1638,7 +1783,7 @@ function openAgent(a, g) {
       runs.length ? h("div", {}, runs.slice(0, 8).map((r) => h("a", { class: "row", href: "#issue/" + r.id, onclick: () => closeModal(true), style: "padding:8px 0;border-bottom:1px solid var(--border);color:inherit;text-decoration:none;flex-wrap:nowrap" },
         typeIcon(), h("span", { class: "key" }, keyOf(r)), h("span", { class: "grow ellipsis" }, r.topic || ""), lz(r.status))))
         : h("div", { class: "small" }, a.state === "planned" ? "아직 정의만 있는 예정 에이전트입니다. 실행기에 연결하면 여기에 작업이 쌓입니다." : "실행 기록이 없습니다."),
-      h("div", { class: "msg", style: "margin-top:20px" }, ic("info", 20), h("div", {}, "정의 파일: ", h("code", {}, `.claude/agents/${a.name}.md`), " · 목록: ", h("code", {}, "hub/agents.json"))))],
+      h("div", { class: "msg", style: "margin-top:20px" }, ic("info", 20), h("div", {}, "정의 파일: ", h("code", {}, g.tool ? `tools/${g.tool}/agents/${a.name}.md` : `.claude/agents/${a.name}.md`), " · 부서: ", h("a", { href: "#dept/" + g.id, onclick: () => closeModal(true) }, deptName(g)))))],
   { side: true, label: a.title });
 }
 
@@ -1693,7 +1838,7 @@ function renderSettings(root) {
     section("이용권", "웹 콘솔에서 가입·결제하고 이 PC를 연결하면 이용권이 자동으로 들어옵니다. 처음 14일은 평가판(모든 도구)입니다.",
       dl(["상태", h("span", { class: "lz " + mode[1] }, mode[0])], ["요금제", { trial: "평가판", starter: "스타터", pro: "프로", team: "팀", legacy: "판매자용(옛 키)" }[lic.plan] || lic.plan || "-"],
         ["쓸 수 있는 도구", (lic.tools || []).includes("*") ? "전부" : (lic.tools || []).map(toolName).join(", ") || "없음"],
-        ["고객", lic.customer || "(미설정)"], ["만료", lic.expires || "-"], ["남은 일수", lic.days_left == null ? "-" : lic.days_left + "일"], ["이 PC 기기 ID", h("code", {}, lic.device || "-")]),
+        ["만료", lic.expires || "-"], ["남은 일수", lic.days_left == null ? "-" : lic.days_left + "일"], ["이 PC 기기 ID", h("code", {}, lic.device || "-")]),
       lic.mode === "grace" ? h("div", { class: "msg warn", style: "margin-top:12px" }, ic("warn", 20), h("div", {}, "이용권 기간이 지나 유예 중입니다. 인터넷 연결과 웹 콘솔 결제 상태를 확인하세요.")) : null,
       lic.key_ok === false ? h("div", { class: "msg err", style: "margin-top:12px" }, ic("err", 20), h("div", {}, lic.error || "입력된 이용권이 맞지 않습니다.")) : null),
     keySection(section),
@@ -1703,7 +1848,7 @@ function renderSettings(root) {
         h("div", { class: "row", style: "flex-wrap:nowrap" }, key, h("button", { class: "btn primary", onclick: (e) => reg(e.currentTarget) }, "등록")),
         h("div", { class: "help" }, "웹 콘솔 → 기기 → 「오프라인 토큰」에서 이 PC 기기 ID로 받은 토큰을 붙여 넣습니다."))),
     section("제품 정보", "브랜딩(제품명·고객사·로고 글자·색)은 hub/config.json 의 branding, 비밀번호는 .env 의 HUB_PASSWORD 에서 바꿉니다.",
-      dl(["제품명", b.product_name || "Agent Hub"], ["고객사", b.customer_name || "-"], ["로고", h("span", { class: "logo", style: b.accent ? `background:${b.accent}` : "" }, (b.logo_text || "AH").slice(0, 3))], ["버전", S.version]),
+      dl(["제품명", b.product_name || "Agent Hub"], ["로고", h("span", { class: "logo", style: b.accent ? `background:${b.accent}` : "" }, (b.logo_text || "AH").slice(0, 3))], ["버전", S.version]),
       null),
     section("운영 한도", "hub/config.json 의 daily_budget_usd, port 에서 바꿉니다. 외부 접속은 열지 않습니다.",
       dl(["하루 API 한도", usd(S.usage.budget_usd)], ["오늘 사용", usd(S.usage.total_usd)], ["접속", (S.lan || {}).enabled ? "이 PC + 같은 와이파이 휴대폰(비밀번호)" : "이 PC 전용(127.0.0.1)"],
@@ -1749,7 +1894,7 @@ function showLogin(session) {
     h("h2", {}, "관리 화면에 로그인"),
     h("div", { class: "field" }, h("label", { for: "pw" }, "비밀번호"), pw, err),
     h("button", { class: "btn primary", style: "width:100%;height:40px", onclick: go }, "계속"),
-    h("div", { class: "small", style: "text-align:center;margin-top:20px" }, (b.customer_name ? b.customer_name + " · " : "") + "이 PC(127.0.0.1)에서만 열립니다."))));
+    h("div", { class: "small", style: "text-align:center;margin-top:20px" }, "이 PC(127.0.0.1)에서만 열립니다."))));
   document.title = (b.product_name || "Agent Hub") + " · 로그인";
   setTimeout(() => pw.focus(), 30);
 }
@@ -1763,6 +1908,15 @@ window.addEventListener("appinstalled", () => { store.set("installed", true); co
 // ---------- 단축키 ----------
 let gPending = 0;
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") {   // 창(모달)이 열려 있으면 Tab 이 창 밖으로 나가지 않게
+    const m = [...document.querySelectorAll(".blanket")].pop();
+    if (m) {
+      const f = [...m.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
+      if (f.length) { const i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && (i === -1 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); } }
+    }
+    return;
+  }
   if (e.key === "Escape") { if ($(".popover")) { closePop(); return; } if ($(".blanket")) { e.preventDefault(); closeModal(); } return; }
   const t = e.target; if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (t && (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable)) return;
@@ -1781,7 +1935,7 @@ document.addEventListener("keydown", (e) => {
     gPending = 0; if (m) { go(m); return; }
   }
   if (e.key === "g" || e.key === "G") { gPending = Date.now(); return; }
-  if (e.key === "c" || e.key === "C") { e.preventDefault(); go("make"); return; }
+  if (e.key === "c" || e.key === "C") { e.preventDefault(); quickCreate(); return; }
   if (e.key === "[") toggleSidebar();
 });
 
@@ -1873,14 +2027,22 @@ function hrShift(body) {
       const days = h("span", { class: "shift-days" }, DAY_KO.map((d, i) => h("label", {}, h("input", { type: "checkbox", value: i, checked: sh.days.includes(i), disabled: !custom }), d)));
       const st = h("input", { type: "time", value: sh.start === "24:00" ? "00:00" : sh.start, disabled: !custom, class: "inp sm" });
       const en = h("input", { type: "time", value: sh.end === "24:00" ? "23:59" : sh.end, disabled: !custom, class: "inp sm" });
-      const sel = h("select", { class: "inp sm", onchange: () => { const c = sel.value === "custom"; for (const x of [...days.querySelectorAll("input"), st, en]) x.disabled = !c; } },
+      // 미리 정한 시프트면 요일·시각 칸은 숨기고(직접 정하기일 때만 보임), 저장 버튼은 값을 바꾼 줄에만 보인다
+      const custBox = h("span", { class: "row shift-custom", style: "gap:6px;flex-wrap:wrap", hidden: !custom }, days, st, "~", en);
+      const val = () => JSON.stringify([sel.value, [...days.querySelectorAll("input:checked")].map((x) => x.value), st.value, en.value]);
+      let orig = "";
+      const sel = h("select", { class: "inp sm", "aria-label": `${a.title} 근무 시프트`, onchange: () => { const c = sel.value === "custom"; for (const x of [...days.querySelectorAll("input"), st, en]) x.disabled = !c; custBox.hidden = !c; } },
         presets.map(([k, l]) => h("option", { value: k, selected: sh.preset === k }, l)), h("option", { value: "custom", selected: custom }, "직접 정하기"));
-      const save = h("button", { class: "btn sm primary", onclick: () => {
+      st.setAttribute("aria-label", "시작 시각"); en.setAttribute("aria-label", "끝 시각");
+      const save = h("button", { class: "btn sm primary", hidden: true, onclick: () => {
         const shift = sel.value === "custom" ? { preset: "custom", days: [...days.querySelectorAll("input:checked")].map((x) => +x.value), start: st.value, end: en.value === "23:59" ? "24:00" : en.value } : { preset: sel.value };
         hrPost(`/api/hr/${a.name}/shift`, { shift }, `${a.title} 근무 시간을 바꿨습니다`); } }, "저장");
+      const undo = h("button", { class: "btn sm subtle", hidden: true, onclick: () => renderHr($("#page")) }, "취소");
+      const line = h("div", { class: "row", style: "gap:6px;flex-wrap:wrap", oninput: () => { const d = val() !== orig; save.hidden = undo.hidden = !d; }, onchange: () => { const d = val() !== orig; save.hidden = undo.hidden = !d; } }, sel, custBox, save, undo);
+      orig = val();
       tbody.append(h("tr", {}, h("td", {}, h("div", { class: "agent-name" }, avatar(a.name, "lg"), h("div", {}, h("b", {}, a.title), h("small", {}, a.name)))),
         h("td", { class: "nowrap" }, hrChip(hr)),
-        h("td", { class: "shift-cell" }, h("div", { class: "row", style: "gap:6px;flex-wrap:wrap" }, sel, days, st, "~", en, save), shiftBar(sh)),
+        h("td", { class: "shift-cell" }, line, shiftBar(sh)),
         h("td", { class: "small" }, hr.why || "지금 일할 수 있음")));
     }
   }
@@ -2003,7 +2165,7 @@ function hrPerf(body, root) {
     h("td", { class: "nowrap" }, pct(p.first_pass)),
     h("td", { class: "nowrap" }, p.cost_avg ? usd(p.cost_avg) : "-", h("div", { class: "small" }, p.cost_total ? `누적 ${usd(p.cost_total)}` : "")),
     h("td", { class: "small", style: "max-width:220px" }, p.reject_reasons.length ? p.reject_reasons.map((x) => h("div", {}, "· " + x)) : "-"),
-    h("td", { class: "small" }, p.top_rules.length ? p.top_rules.map(([r, n]) => h("div", {}, `${r} ${n}회`)) : "-"),
+    h("td", { class: "small" }, p.top_rules.length ? p.top_rules.map(([r, n]) => h("div", { class: "nowrap", title: r }, `${ruleKo(r)} ${n}회`)) : "-"),
     h("td", { class: "small" }, stepOf(g, a.name), p.tools.length > 1 ? h("div", {}, h("span", { class: "lz yellow" }, `도구 ${p.tools.length}개`)) : null),
     h("td", { class: "small" }, p.approved_runs.length ? p.approved_runs.map((r) => h("div", { class: "row", style: "gap:4px;flex-wrap:nowrap" },
       h("button", { class: "star" + (exSet.has(r.id) ? " on" : ""), title: exSet.has(r.id) ? "기준 예시 해제" : "기준 예시로 지정", onclick: async () => {
@@ -2042,4 +2204,361 @@ function keySection(section) {
     !local ? h("div", { class: "msg warn" }, ic("warn", 20), h("div", {}, "API 키는 이 PC에서 연 관리 화면(127.0.0.1)에서만 넣거나 바꿀 수 있습니다.")) : null,
     main.map(row),
     rest.length ? h("details", { class: "key-more" }, h("summary", { class: "small" }, `다른 모델 키 ${rest.length}개(선택: 공개 자료 작업을 외부 무료·저가 모델로 돌릴 때)`), rest.map(row)) : null);
+}
+
+// ---------- 부서(업무 단위): 옆 메뉴 + 부서 화면 ----------
+// 부서 = 켜진 도구의 팀(인스타그램·이모티콘·굿즈·크몽·웹소설 …). 일은 부서 단위로 맡기고, 부서 안의 워크플로우가 에이전트에게 단계를 나눈다.
+const deptRuns = (g) => S.runs.filter((r) => (r.tool || "instagram") === g.tool || (!g.tool && g.agents.some((a) => a.name === r.agent)));
+const deptIcon = (g) => (TOOL[g.tool] || {}).icon || "🧩";
+const deptName = (g) => String(g.title || g.id).replace(/ 팀(?=\(|$)/, "");
+let deptSig = "";
+function toggleDeptMenu() {
+  const anchor = $("#tb-dept").parentElement;
+  if ($(".popover.dept-pop")) { closePop(); return; }
+  const p = showPop(anchor, [h("div", { class: "pop-h" }, "부서"),
+    S.groups.map((g) => { const dr = deptRuns(g), wait = dr.filter((r) => OPEN.includes(r.status)).length;
+      return h("a", { class: "pop-item", href: "#dept/" + g.id, onclick: closePop }, h("span", { class: "dept-ic sm" }, deptIcon(g)),
+        h("div", { class: "grow", style: "min-width:0" }, h("div", {}, deptName(g)), h("div", { class: "small" }, `에이전트 ${g.agents.filter((a) => a.state !== "planned").length}명 · 작업 ${dr.length}건`)),
+        wait ? h("span", { class: "lz yellow" }, wait) : null); }),
+    h("a", { class: "pop-foot", href: "#tools", onclick: closePop }, ic("settings", 14), "부서 관리")], "dept-pop");
+  p.addEventListener("click", (e) => e.stopPropagation());
+}
+// 옆 메뉴 맨 위: 제품 이름은 위 막대에만 두고, 여기는 지금 보고 있는 곳(부서 또는 작업 공간)을 보인다 — Jira 의 프로젝트 머리처럼
+function renderSbProject() {
+  const box = $("#sb-project"); if (!box || !S) return;
+  const g = route.page === "dept" && S.groups.find((x) => x.id === route.id);
+  const nAgents = S.groups.reduce((a, x) => a + x.agents.filter((y) => y.state !== "planned").length, 0);
+  const sig = g ? "d:" + g.id : "w:" + S.groups.length + ":" + nAgents;
+  if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+  box.replaceChildren(g ? h("span", { class: "sbp-ic", "aria-hidden": "true" }, deptIcon(g)) : h("span", { class: "sbp-ic ws", "aria-hidden": "true" }, ic("apps", 18)),
+    h("div", { style: "min-width:0" }, h("b", { class: "ellipsis" }, g ? deptName(g) : "작업 공간"),
+      h("small", {}, g ? `부서 · 에이전트 ${g.agents.filter((a) => a.state !== "planned").length}명` : `부서 ${S.groups.length}개 · 에이전트 ${nAgents}명`)));
+}
+function renderDeptNav() {
+  const box = $("#sb-depts"); if (!box || !S) return;
+  const items = S.groups.map((g) => [g, deptRuns(g).filter((r) => OPEN.includes(r.status)).length, deptRuns(g).filter((r) => ["queued", "running", "validating"].includes(r.status)).length]);
+  const sig = JSON.stringify(items.map(([g, a, b]) => [g.id, g.title, a, b]));
+  if (sig === deptSig && box.childElementCount) return; deptSig = sig;
+  box.replaceChildren(...items.map(([g, wait, busy]) => h("a", { class: "sb-item sb-dept", href: "#dept/" + g.id, "data-p": "dept/" + g.id, title: g.title },
+    h("span", { class: "sb-emoji", "aria-hidden": "true" }, deptIcon(g)), h("span", {}, deptName(g)),
+    busy ? h("i", { class: "sb-live", title: `작업 중 ${busy}` }) : null, wait ? h("b", { class: "sb-count" }, wait) : null)));
+}
+ui.deptTab = store.get("deptTab", "summary");
+function renderDept(root, id, isUpdate) {
+  const g = S.groups.find((x) => x.id === id);
+  if (!g) { root.className = "page"; root.replaceChildren(...pageHead("부서"), h("div", { class: "card" }, emptyState("없는 부서입니다", "「부서 관리」에서 부서를 켜면 옆 메뉴에 나타납니다."))); return; }
+  const runs = deptRuns(g);
+  const n = (sts) => runs.filter((r) => sts.includes(r.status)).length;
+  const TABS = [["summary", "요약"], ["flow", "워크플로우"], ["board", "보드"], ["list", "작업 목록", runs.length], ["agents", "에이전트", g.agents.filter((a) => a.state !== "planned").length], ...(g.tool ? [["settings", "설정"]] : [])];
+  if (!TABS.some(([k]) => k === ui.deptTab)) ui.deptTab = "summary";
+  const tab = ui.deptTab;
+  const body = $("#dept-body");
+  if (isUpdate && body && root.dataset.dept === id) {
+    if (tab === "flow") return;   // 워크플로우 편집 중에는 다시 그리지 않는다
+    for (const [k, , c] of TABS) { const el = root.querySelector(`.tabs [data-k="${k}"] .n`); if (el && c != null) el.textContent = c; }
+    return drawDeptTab(body, g, runs, tab);
+  }
+  root.className = "page"; root.style.maxWidth = "none"; root.dataset.dept = id;
+  const tabs = h("div", { class: "tabs dept-tabs", role: "tablist" }, TABS.map(([k, l, c]) => h("button", { role: "tab", "data-k": k, class: tab === k ? "on" : "", "aria-selected": String(tab === k),
+    onclick: () => { ui.deptTab = k; store.set("deptTab", k); renderDept(root, id); } }, l, c != null ? h("span", { class: "n" }, c) : null)));
+  const nb = h("div", { id: "dept-body" });
+  root.replaceChildren(...pageHead(h("span", { class: "row", style: "gap:10px" }, h("span", { class: "dept-ic" }, deptIcon(g)), deptName(g)), [h("a", { href: "#tools" }, "부서")],
+    [h("button", { class: "btn primary", onclick: () => quickCreate({ tool: g.tool }) }, ic("play", 16), "일 맡기기"),
+     h("button", { class: "btn", onclick: () => { ui.auto.tab = "sched"; store.set("autoTab", "sched"); ui.auto.edit = { area: g.tool === "instagram" ? "insta" : "etc", where: "hub", tool: g.tool }; go("automation"); } }, ic("clock", 16), "예약 작업"),
+     h("button", { class: "btn subtle icon-only", title: "부서 설정", "aria-label": "부서 설정", onclick: () => { ui.deptTab = "settings"; store.set("deptTab", "settings"); renderDept(root, id); } }, ic("settings", 16))]),
+    g.purpose ? h("p", { class: "dept-purpose" }, g.purpose) : null, tabs, nb);
+  drawDeptTab(nb, g, runs, tab);
+}
+function drawDeptTab(body, g, runs, tab) {
+  const n = (sts) => runs.filter((r) => sts.includes(r.status)).length;
+  const week = ymd(new Date(Date.now() - 6 * 864e5));
+  if (tab === "flow") {
+    const flowHost = h("div", { class: "dept-flow" });
+    body.replaceChildren(h("section", { class: "card dept-flow-card" }, h("div", { class: "card-h" }, h("h3", {}, "에이전틱 워크플로우"), h("span", { class: "small" }, "이 부서에 들어온 일이 어떤 순서로 어느 에이전트에게 나뉘는지 — 사람이 하는 단계(승인·게시)도 함께")), flowHost));
+    if (matchMedia("(max-width: 640px)").matches) return flowHost.append(flowSteps(g), h("div", { class: "small", style: "margin-top:8px" }, "워크플로우 고치기·AI로 만들기는 PC 화면에서 할 수 있습니다."));
+    try { FlowEditor.mount(flowHost, S, () => refresh(true), { lock: g.id }); } catch (e) { flowHost.append(h("div", { class: "small" }, "워크플로우를 그리지 못했습니다.")); }
+    return;
+  }
+  if (tab === "board" || tab === "list") {
+    deptScope = g.id;
+    const host = h("div");
+    body.replaceChildren(host);
+    try { tab === "board" ? drawBoard(host) : drawList(host); } finally { deptScope = null; }
+    return;
+  }
+  if (tab === "settings") {
+    const old = body.querySelector(".dept-settings");
+    if (old && old.dataset.dirty === "1") return;   // 설정을 고치는 중이면 다시 그리지 않는다
+    const host = h("div", { class: "dept-settings" });
+    body.replaceChildren(host);
+    renderTools(host, false, g.tool);
+    return;
+  }
+  if (tab === "agents") {
+    body.replaceChildren(h("div", { class: "card", style: "padding:0" }, h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["에이전트", "상태", "맡은 단계", "역할", "실행"].map((t) => h("th", {}, t)))),
+      h("tbody", {}, g.agents.map((a) => { const st = AGENT_STATE[a.state] || [a.state, ""]; const steps = (g.flow || []).filter((f) => f.who === a.name).map((f) => f.step); const ar = runs.filter((r) => r.agent === a.name).length;
+        return h("tr", { class: "click" + (a.state === "planned" ? " dim" : ""), tabindex: "0", onclick: () => openAgent(a, g), onkeydown: (e) => { if (e.key === "Enter") openAgent(a, g); } },
+          h("td", {}, h("div", { class: "agent-name" }, avatar(a.name, "lg"), h("div", {}, h("b", {}, a.title, a.name === g.lead ? h("span", { class: "lz purple", style: "margin-left:6px" }, "리드") : null), h("small", {}, a.name)))),
+          h("td", { class: "nowrap" }, h("span", { class: "lz " + st[1] }, st[0])), h("td", { class: "small" }, steps.join(", ") || "-"),
+          h("td", {}, h("div", { class: "clamp2", title: a.role }, a.role)), h("td", { class: "nowrap small" }, ar ? `${ar}건` : "-")); })))));
+    return;
+  }
+  // 요약
+  const staffed = g.agents.filter((a) => a.state !== "planned").length;
+  const tabLink = (k, label) => h("button", { class: "btn subtle sm", onclick: () => { ui.deptTab = k; store.set("deptTab", k); renderDept($("#page"), g.id); } }, label);
+  body.replaceChildren(
+    h("div", { class: "grid g4 dept-kpis" },
+      kpi("작업 중", n(["queued", "running", "validating"]), "play"), kpi("승인 대기", n(["awaiting_approval"]), "inbox", "#inbox"),
+      kpi("다시 만들 것", n(["validation_failed", "error"]), "warn"), kpi("최근 7일 완료", runs.filter((r) => ["approved", "rejected"].includes(r.status) && (r.created || "") >= week).length, "check")),
+    h("section", { class: "card", style: "margin-bottom:16px" }, h("div", { class: "card-h" }, h("h3", {}, "워크플로우"), tabLink("flow", "편집하기")), flowStrip(g, runs)),
+    h("div", { class: "dept-cols" },
+      h("section", { class: "card" }, h("div", { class: "card-h" }, h("h3", {}, "배치된 에이전트"), h("span", { class: "small" }, `${staffed} / ${g.agents.length}명 · 리드 ${agentTitle[g.lead] || g.lead}`)),
+        h("ul", { class: "dept-agents" }, g.agents.filter((a) => a.state !== "planned").map((a) => { const st = AGENT_STATE[a.state] || [a.state, ""]; const step = (g.flow || []).find((f) => f.who === a.name);
+          return h("li", { tabindex: "0", onclick: () => openAgent(a, g), onkeydown: (e) => { if (e.key === "Enter") openAgent(a, g); } },
+            avatar(a.name), h("div", { class: "grow", style: "min-width:0" }, h("div", {}, h("b", {}, a.title), a.name === g.lead ? h("span", { class: "lz purple", style: "margin-left:6px" }, "리드") : null),
+              h("div", { class: "small ellipsis" }, step ? `맡은 단계: ${step.step}` : a.role)), h("span", { class: "lz " + st[1] }, st[0])); }),
+          g.agents.some((a) => a.state === "planned") ? h("li", { class: "more" }, tabLink("agents", `예정 ${g.agents.filter((a) => a.state === "planned").length}명 포함 전체 보기`)) : null)),
+      h("section", { class: "card" }, h("div", { class: "card-h" }, h("h3", {}, "최근 작업"), tabLink("list", "전체 보기")),
+        runs.length ? h("ul", { class: "dept-runs" }, runs.slice(0, 8).map((r) => h("li", { tabindex: "0", onclick: () => openIssue(r.id), onkeydown: (e) => { if (e.key === "Enter") openIssue(r.id); } },
+          typeIcon(), h("span", { class: "key" }, keyOf(r)), h("span", { class: "grow ellipsis" }, r.topic || "(주제 없음)"), lz(r.status), h("span", { class: "small nowrap" }, ago(r.created)))))
+          : emptyState("아직 작업이 없습니다", "「일 맡기기」로 첫 작업을 시작하세요."))));
+}
+// 워크플로우 한 줄 요약: 단계마다 담당과 지금 그 단계에 있는 일 수
+function flowStrip(g, runs) {
+  const at = { "trend-scout": 0 }; const live = (who) => runs.filter((r) => r.agent === who && ["queued", "running"].includes(r.status)).length + (who === "reels-validator" ? runs.filter((r) => r.status === "validating").length : 0);
+  const KIND = { agent: "에이전트", code: "코드 검사", browser: "크롬 통제", human: "사람" };
+  return h("div", { class: "fstrip" }, (g.flow || []).map((f, i) => { const a = g.agents.find((x) => x.name === f.who); const k = live(f.who);
+    return [i ? h("span", { class: "fs-arrow", "aria-hidden": "true" }, "→") : null,
+      h("div", { class: "fs-step k-" + (f.kind || "agent") + (a && a.state === "planned" ? " planned" : "") + (k ? " live" : ""), title: `${f.step} · ${a ? a.title : f.who}` },
+        h("div", { class: "fs-k" }, KIND[f.kind] || f.kind, k ? h("b", {}, ` · ${k}건`) : null), h("div", { class: "fs-s" }, f.step), h("div", { class: "fs-w" }, a ? a.title : f.who === "사람" ? "사람" : f.who))]; }));
+}
+function flowSteps(g) {
+  const KIND = { agent: ["에이전트", "blue"], code: ["코드 검사", ""], browser: ["크롬 통제", "green"], human: ["사람", "yellow"] };
+  return h("ol", { class: "dept-steps" }, (g.flow || []).map((f) => { const a = g.agents.find((x) => x.name === f.who); const k = KIND[f.kind] || [f.kind, ""];
+    return h("li", { class: a && a.state === "planned" ? "planned" : "" }, h("b", {}, f.step), h("div", { class: "small" }, h("span", { class: "lz " + k[1] }, k[0]), " ", a ? a.title : f.who)); }));
+}
+function kpi(label, v, icon, href) {
+  return h(href ? "a" : "div", { class: "card stat", href, style: href ? "color:inherit;text-decoration:none" : "" }, h("span", { class: "ic" }, ic(icon, 20)), h("div", {}, h("b", {}, v), h("span", {}, label)));
+}
+
+// ---------- 앱 런처(Salesforce App Launcher 처럼): 부서·기능을 한곳에서 찾아 연다 ----------
+function openLauncher() {
+  const q = h("input", { class: "input", type: "search", placeholder: "부서·기능 검색 (예: 인스타, 승인, 워크플로우)", "aria-label": "앱 런처 검색", autofocus: true });
+  const body = h("div", { class: "launcher-b" });
+  const PAGES = NAV.filter((n) => n.page).map((n) => ({ href: "#" + n.page, icon: n.icon, label: n.label, desc: { summary: "오늘 할 일·부서 현황", inbox: "에이전트 결과를 승인·반려", publish: "승인된 결과물 게시 준비", board: "모든 작업을 칸반으로", list: "모든 작업을 표로", calendar: "월별 콘텐츠 계획", assign: "부서별 단계 담당 정하기·담당에게 업무 주기", automation: "워크플로우 편집·예약 작업", agents: "에이전트 전체 명단", monitor: "사무실·실시간 상태", hr: "근무·성과·사규·징계", activity: "도구 사용·차단·상태 기록", tools: "부서 켜기·규칙·에이전트 배치" }[n.page] || "" }))
+    .concat([{ href: "#make", icon: "plus", label: "일 맡기기", desc: "부서에 새 작업 맡기기" }, { href: "#settings", icon: "settings", label: "설정", desc: "이용권·API 키·화면" }]);
+  const draw = () => {
+    const k = q.value.trim().toLowerCase();
+    const hit = (x) => !k || x.toLowerCase().includes(k);
+    const depts = S.groups.filter((g) => hit(deptName(g) + " " + (g.purpose || "")));
+    const pages = PAGES.filter((p) => hit(p.label + " " + p.desc));
+    body.replaceChildren(
+      depts.length ? [h("div", { class: "launcher-sec" }, "부서"), h("div", { class: "launcher-grid" }, depts.map((g) => { const dr = deptRuns(g), wait = dr.filter((r) => OPEN.includes(r.status)).length;
+        return h("a", { class: "launcher-tile", href: "#dept/" + g.id, onclick: () => closeModal() }, h("span", { class: "lt-ic" }, deptIcon(g)),
+          h("div", { style: "min-width:0" }, h("b", {}, deptName(g)), h("div", { class: "small ellipsis2" }, g.purpose || ""),
+            h("div", { class: "small", style: "margin-top:4px" }, `에이전트 ${g.agents.filter((a) => a.state !== "planned").length}명 · 작업 ${dr.length}건`, wait ? h("span", { class: "lz yellow", style: "margin-left:6px" }, `처리할 것 ${wait}`) : null))); }))] : null,
+      pages.length ? [h("div", { class: "launcher-sec" }, "기능"), h("div", { class: "launcher-list" }, pages.map((p) => h("a", { class: "launcher-item", href: p.href, onclick: () => closeModal() }, ic(p.icon, 18), h("div", { style: "min-width:0" }, h("b", {}, p.label), h("div", { class: "small" }, p.desc)))))] : null,
+      !depts.length && !pages.length ? emptyState("찾는 것이 없습니다", "다른 말로 검색해 보세요.") : null);
+  };
+  q.addEventListener("input", draw);
+  q.addEventListener("keydown", (e) => { if (e.key === "Enter") { const a = body.querySelector("a"); if (a) { location.hash = a.getAttribute("href"); closeModal(); } } });
+  draw();
+  openModal([h("div", { class: "modal-h" }, ic("apps", 22), h("h2", {}, "앱 런처")), h("div", { class: "modal-b" }, q, body)], { size: "lg", label: "앱 런처" });
+  setTimeout(() => q.focus(), 30);
+}
+document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K") && S) { e.preventDefault(); if ($(".blanket")) closeModal(); else openLauncher(); } });
+
+// ---------- 작업 상세: Salesforce 「Path」(단계 화살표) + 하이라이트 ----------
+function runPath(run, sum) {
+  // 그 부서의 워크플로우 단계를 그대로 화살표로 — 지금 이 작업이 어느 단계에 있는지
+  const g = S.groups.find((x) => x.tool === (run.tool || "instagram")) || S.groups.find((x) => x.agents.some((a) => a.name === run.agent));
+  const flow = (g && g.flow && g.flow.length) ? g.flow : [{ step: "작업", who: run.agent, kind: "agent" }, { step: "규칙 검수", kind: "code" }, { step: "승인", who: "사람", kind: "human" }, { step: "게시", who: "사람", kind: "human" }];
+  const st = run.status, posted = postedIds().has(run.id);
+  const at = (f) => { const i = flow.findIndex(f); return i < 0 ? null : i; };
+  const mine = at((f) => f.who === run.agent) ?? 0;
+  const code = at((f) => f.kind === "code") ?? Math.min(mine + 1, flow.length - 1);
+  const appr = at((f) => f.kind === "human" && /승인/.test(f.step)) ?? at((f) => f.kind === "human") ?? flow.length - 1;
+  const cur = posted ? flow.length - 1 : st === "approved" ? Math.min(appr + 1, flow.length - 1) : ["awaiting_approval", "rejected"].includes(st) ? appr
+    : ["validating", "validation_failed"].includes(st) ? code : mine;
+  const bad = ["validation_failed", "error", "rejected"].includes(st);
+  const done = posted && cur === flow.length - 1;
+  const label = (i, l) => i !== cur ? l : st === "rejected" ? `${l} · 반려` : st === "validation_failed" ? `${l} · 실패` : st === "error" ? `${l} · 오류` : l;
+  return h("div", { class: "spath-wrap" }, h("ol", { class: "spath" + (flow.length > 6 ? " many" : ""), "aria-label": "워크플로우 진행 단계" }, flow.map((f, i) => {
+    const a = g && g.agents.find((x) => x.name === f.who);
+    return h("li", { class: (i < cur || done ? "done" : i === cur ? (bad ? "cur bad" : "cur") : "") + " k-" + (f.kind || "agent"), "aria-current": i === cur ? "step" : null,
+      title: `${i + 1}. ${f.step} — ${a ? a.title : f.who || ""}` }, i < cur || done ? ic("check", 13, 3) : null, h("span", {}, label(i, f.step))); })),
+    h("div", { class: "small spath-cap" }, g ? `${deptName(g)} 워크플로우 ${flow.length}단계 중 ${cur + 1}단계 · ${flow[cur].step}${flow[cur].who ? " — " + ((g.agents.find((x) => x.name === flow[cur].who) || {}).title || flow[cur].who) : ""}` : ""));
+}
+function runHighlights(run, sum) {
+  const g = S.groups.find((x) => x.tool === (run.tool || "instagram"));
+  const v = run.validation || { errors: [], warnings: [] };
+  const f = (k, v) => h("div", { class: "hl-f" }, h("span", {}, k), h("b", {}, v));
+  return h("div", { class: "hl" },
+    f("부서", g ? [deptIcon(g), " ", deptName(g)] : toolName(run.tool)),
+    f("담당", agentTitle[run.agent] || run.agent),
+    (run.params || {}).account ? f("계정", ACCOUNTS[run.params.account] || run.params.account) : null,
+    f("검수", v.errors.length ? h("span", { class: "lz red" }, `오류 ${v.errors.length}`) : v.passed === false ? "-" : h("span", { class: "lz green" }, "통과")),
+    f("비용", usd(run.cost_usd)),
+    f("만든 시각", short(run.created)));
+}
+
+// ---------- 홈 대시보드 차트(Salesforce 홈의 성과 차트처럼): 부서별 상태 막대 + 14일 추이 ----------
+const ST_GROUP = [["진행", ["queued", "running", "validating"], "#1D7AFC"], ["승인 대기", ["awaiting_approval"], "#E2B203"], ["다시 만들 것", ["validation_failed", "error"], "#C9372C"], ["승인", ["approved"], "#1F845A"], ["반려", ["rejected"], "#8590A2"]];
+function deptStatusChart() {
+  const rows = S.groups.map((g) => [g, ST_GROUP.map(([, sts]) => deptRuns(g).filter((r) => sts.includes(r.status)).length)]);
+  const max = Math.max(1, ...rows.map(([, c]) => c.reduce((a, b) => a + b, 0)));
+  return h("section", { class: "card" }, h("div", { class: "card-h" }, h("h3", {}, "부서별 작업 상태"), h("div", { class: "legend" }, ST_GROUP.map(([l, , c]) => h("span", {}, h("i", { style: `background:${c}` }), l)))),
+    h("div", { class: "hbars" }, rows.map(([g, c]) => { const tot = c.reduce((a, b) => a + b, 0);
+      return h("a", { class: "hbar", href: "#dept/" + g.id, title: `${deptName(g)} — ` + ST_GROUP.map(([l], i) => `${l} ${c[i]}`).join(" · ") },
+        h("span", { class: "hb-l" }, deptIcon(g), " ", deptName(g)),
+        h("span", { class: "hb-t" }, c.map((n, i) => n ? h("i", { style: `width:${(n / max) * 100}%;background:${ST_GROUP[i][2]}` }) : null)),
+        h("span", { class: "hb-n" }, tot)); })));
+}
+function trendChart() {
+  const days = [...Array(14)].map((_, i) => ymd(new Date(Date.now() - (13 - i) * 864e5)));
+  const made = days.map((d) => S.runs.filter((r) => (r.created || "").startsWith(d)).length);
+  const ok = days.map((d) => S.runs.filter((r) => (r.created || "").startsWith(d) && r.status === "approved").length);
+  const max = Math.max(1, ...made), W = 420, H = 140, bw = W / days.length;
+  const svg = `<svg viewBox="0 0 ${W} ${H + 18}" class="trend" role="img" aria-label="최근 14일 작업 수">` +
+    days.map((d, i) => { const hm = (made[i] / max) * H, ho = (ok[i] / max) * H; return `<g><title>${d.slice(5)} · 만든 것 ${made[i]} · 승인 ${ok[i]}</title>` +
+      `<rect x="${i * bw + 3}" y="${H - hm}" width="${bw - 6}" height="${hm}" rx="2" fill="var(--tr-a)"/>` +
+      `<rect x="${i * bw + 3}" y="${H - ho}" width="${bw - 6}" height="${ho}" rx="2" fill="#1F845A"/>` +
+      (i % 2 === 1 ? `<text x="${i * bw + bw / 2}" y="${H + 14}" text-anchor="middle">${+d.slice(8)}</text>` : "") + `</g>`; }).join("") + `</svg>`;
+  return h("section", { class: "card" }, h("div", { class: "card-h" }, h("h3", {}, "최근 14일"), h("div", { class: "legend" }, h("span", {}, h("i", { style: "background:var(--tr-a)" }), "만든 작업"), h("span", {}, h("i", { style: "background:#1F845A" }), "승인"))),
+    h("div", { html: svg }), h("div", { class: "small" }, `합계 ${made.reduce((a, b) => a + b, 0)}건 · 승인 ${ok.reduce((a, b) => a + b, 0)}건`));
+}
+
+// ---------- 목록 보기 필터(Salesforce 목록 보기처럼): 부서·상태·계정 ----------
+ui.listF = store.get("listF", { dept: "", st: "", acc: "" });
+function listFiltered(runs) {
+  if (deptScope) return runs;   // 부서 화면 안에서는 이미 그 부서로 좁혀져 있다
+  const f = ui.listF, g = f.dept && S.groups.find((x) => x.id === f.dept), grp = f.st && ST_GROUP.find(([l]) => l === f.st);
+  return runs.filter((r) => (!g || deptRuns(g).includes(r)) && (!grp || grp[1].includes(r.status)) && (!f.acc || r.account === f.acc));
+}
+function listFilters(onChange) {
+  if (deptScope) return null;
+  const f = ui.listF;
+  const sel = (key, label, opts) => h("select", { class: "input filt" + (f[key] ? " on" : ""), "aria-label": label, onchange: (e) => { f[key] = e.target.value; store.set("listF", f); e.target.classList.toggle("on", !!f[key]); onChange(); } },
+    h("option", { value: "" }, label + ": 전체"), opts.map(([v, l]) => h("option", { value: v, selected: f[key] === v }, l)));
+  const accs = [...new Set(S.runs.map((r) => r.account).filter(Boolean))];
+  return h("span", { class: "filters" },
+    sel("dept", "부서", S.groups.map((g) => [g.id, deptName(g)])), sel("st", "상태", ST_GROUP.map(([l]) => [l, l])),
+    accs.length ? sel("acc", "계정", accs.map((a) => [a, ACCOUNTS[a] || a])) : null,
+    h("button", { class: "btn subtle sm", onclick: (e) => { ui.listF = { dept: "", st: "", acc: "" }; store.set("listF", ui.listF); for (const x of e.currentTarget.parentElement.querySelectorAll("select")) { x.value = ""; x.classList.remove("on"); } onChange(); } }, "필터 지우기"));
+}
+
+// ---------- 빠른 만들기(Salesforce 전역 작업처럼): 어느 화면에서든 부서를 고르고 바로 일을 맡긴다 ----------
+function quickCreate(pre = {}) {
+  const tools = runTools(); if (!tools.length) return go("tools");
+  const cur = route.page === "dept" && S.groups.find((g) => g.id === route.id);
+  const dept = h("select", { class: "input", id: "q-dept" }, tools.map((t) => { const g = S.groups.find((x) => x.tool === t.id); return h("option", { value: t.id, selected: (pre.tool || (cur && cur.tool) || ui.makeTool) === t.id }, `${(g && deptIcon(g)) || t.icon || ""} ${g ? deptName(g) : t.name}`); }));
+  const acc = h("select", { class: "input", id: "q-acc" }, Object.entries(ACCOUNTS).map(([k, v]) => h("option", { value: k }, `${v} (${k})`)));
+  const accBox = h("div", { class: "field" }, h("label", { for: "q-acc" }, "계정"), acc);
+  const who = h("select", { class: "input", id: "q-who" });
+  const whoBox = h("div", { class: "field" }, h("label", { for: "q-who" }, "담당 에이전트"), who);
+  const fillWho = () => { const t = (S.tools || []).find((x) => x.id === dept.value) || {}; const def = (t.run || {}).agent;
+    const names = [...new Set([def, ...(t.agents || [])].filter(Boolean))];
+    who.replaceChildren(...names.map((n) => h("option", { value: n, selected: (pre.agent || def) === n }, `${agentTitle[n] || n}${n === def ? " (기본)" : ""}`))); };
+  const topic = h("textarea", { class: "input", id: "q-topic", rows: 3, placeholder: "무엇을 맡길까요? 예) 전세 계약 전 확인 3가지 릴스" });
+  const flowInfo = h("div", { class: "small qc-flow" });
+  const sync = () => { const t = dept.value; accBox.hidden = t !== "instagram" || !Object.keys(ACCOUNTS).length; const g = S.groups.find((x) => x.tool === t);
+    topic.placeholder = { instagram: "예) 전세 계약 전 확인 3가지 릴스", kmong: "예) 엑셀 자동화 대행 서비스 등록 자료", webnovel: "예) 12화 회차 설계", goods: "예) 겨울 시즌 이모티콘 세트 기획", game: "예) 2장 컷씬 대본", devteam: "예) 로그인 화면 계획서" }[t] || "무엇을 맡길까요?";
+    flowInfo.replaceChildren(g ? [ic("automation", 14), ` ${deptName(g)} 워크플로우: `, (g.flow || []).map((f) => f.step).join(" → ")] : ""); };
+  dept.onchange = () => { pre.agent = ""; sync(); fillWho(); }; sync(); fillWho();
+  const body = () => ({ tool: dept.value, agent: who.value, topic: topic.value.trim(), ...(dept.value === "instagram" ? { account: acc.value } : {}) });
+  const run = async (btn, real) => {
+    const b = body();
+    if (real && !b.topic) return flag("err", "무엇을 맡길지 적어 주세요", "");
+    if (real && !confirm(`실제로 에이전트를 실행합니다(API 비용 발생).\n\n${b.topic}\n\n결과는 승인함으로 갑니다. 시작할까요?`)) return;
+    btn.disabled = true;
+    const r = await api(real ? "/api/run" : "/api/demo", real ? b : { ...b, scenario: "ok" });
+    if (r.ok) { closeModal(true); flag("ok", real ? "일을 맡겼습니다" : "시험 실행을 시작했습니다", "진행 상황은 그 부서 화면과 진행 보드에서 볼 수 있어요."); setTimeout(() => refresh(true), 700); }
+    else { flag("err", "시작하지 못했습니다", r.data.error || "실패"); btn.disabled = false; }
+  };
+  openModal([
+    h("div", { class: "modal-h" }, ic("plus", 22), h("h2", {}, "일 맡기기"), h("button", { class: "tb-icon x", "aria-label": "닫기", onclick: () => closeModal() }, ic("x", 20))),
+    h("div", { class: "modal-b" },
+      h("div", { class: "grid g2", style: "gap:0 16px" }, h("div", { class: "field" }, h("label", { for: "q-dept" }, "부서"), dept), whoBox), accBox,
+      h("div", { class: "field" }, h("label", { for: "q-topic" }, "맡길 일"), topic), flowInfo),
+    h("div", { class: "modal-f" },
+      h("button", { class: "btn subtle", onclick: () => { ui.makeTool = dept.value; store.set("makeTool", dept.value); closeModal(true); go("make"); } }, "자세히 입력"),
+      h("span", { class: "grow" }),
+      h("button", { class: "btn", onclick: (e) => run(e.currentTarget, false), title: "에이전트를 부르지 않는 가짜 결과(비용 없음)" }, "시험 실행"),
+      h("button", { class: "btn primary", onclick: (e) => run(e.currentTarget, true) }, ic("play", 16), "지금 실행"))],
+    { size: "sm", label: "일 맡기기" });
+  setTimeout(() => topic.focus(), 30);
+}
+
+// 에이전트 상세 위 하이라이트(실행·승인률·오늘 비용·근무)
+function agentHighlights(a, runs, cost) {
+  const dec = runs.filter((r) => ["approved", "rejected"].includes(r.status)), ok = dec.filter((r) => r.status === "approved").length;
+  const hr = ((S.hr || {}).agents || {})[a.name];
+  const work = hr ? (hr.status === "dismissed" ? "해고" : hr.status === "suspended" ? "정직" : hr.on_shift ? "근무 중" : "근무 외") : "근무 중";
+  const f = (k, v) => h("div", { class: "hl-f" }, h("span", {}, k), h("b", {}, v));
+  return h("div", { class: "hl", style: "margin-bottom:12px" }, f("실행", `${runs.length}건`), f("승인률", dec.length ? Math.round((ok / dec.length) * 100) + "%" : "-"),
+    f("오늘 비용", usd(cost.cost_usd)), f("근무", h("a", { href: "#hr", onclick: () => closeModal(true) }, work)));
+}
+
+// ---------- 업무 배정: 부서별 워크플로우 단계마다 담당(에이전트·사람·코드)을 정하고, 담당별로 바로 일을 맡긴다 ----------
+ui.assign = { dept: store.get("assignDept", "") };
+function renderAssign(root) {
+  root.className = "page"; root.style.maxWidth = "none"; root.dataset.dirty = "";
+  const groups = S.groups.filter((g) => g.id !== "shared");
+  const g = groups.find((x) => x.id === ui.assign.dept) || groups[0];
+  if (!g) { root.replaceChildren(...pageHead("업무 배정"), emptyState("부서가 없습니다", "부서 관리에서 부서를 켜세요.")); return; }
+  const shared = (S.groups.find((x) => x.id === "shared") || { agents: [] }).agents;
+  const pool = [...g.agents, ...shared].filter((a) => a.state !== "planned" || g.agents.includes(a));
+  const graph = JSON.parse(JSON.stringify(g.flow_graph || { nodes: [], edges: [] }));
+  const order = (() => { const ids = g.flow_order.map((f) => f); const used = new Set(); return ids.map((f) => { const n = graph.nodes.find((x) => !used.has(x.id) && x.label === f.step && x.who === f.who); if (n) used.add(n.id); return n; }).filter(Boolean).concat(graph.nodes.filter((n) => !used.has(n.id) && n.kind !== "note")); })();
+  const KIND = [["agent", "에이전트"], ["code", "코드 검사"], ["browser", "크롬 통제"], ["human", "사람"]];
+  const saveBtn = h("button", { class: "btn primary", hidden: true, onclick: async () => {
+    saveBtn.disabled = true;
+    const r = await api("/api/flows/" + g.id, graph);
+    if (r.ok) { flag("ok", "업무 배정을 저장했습니다", `${deptName(g)} 워크플로우에 바로 반영됩니다.`); root.dataset.dirty = ""; refresh(true); }
+    else { flag("err", "저장하지 못했습니다", r.data.error || ""); saveBtn.disabled = false; }
+  } }, ic("check", 16), "저장");
+  const undo = h("button", { class: "btn subtle", hidden: true, onclick: () => renderAssign(root) }, "되돌리기");
+  const dirty = () => { root.dataset.dirty = "1"; saveBtn.hidden = undo.hidden = false; };
+  const live = (who) => S.runs.filter((r) => r.agent === who && ["queued", "running", "validating"].includes(r.status)).length;
+  const rows = order.map((n, i) => {
+    const whoSel = h("select", { class: "input", "aria-label": `${n.label} 담당`, onchange: (e) => { n.who = e.target.value; if (e.target.value === "사람") n.kind = "human"; else if (n.kind === "human") n.kind = "agent"; kindSel.value = n.kind; dirty(); drawLoad(); } },
+      h("option", { value: "사람", selected: n.who === "사람" || n.kind === "human" }, "👤 사람(대표·담당자)"),
+      h("optgroup", { label: deptName(g) }, g.agents.map((a) => h("option", { value: a.name, selected: n.who === a.name }, `${a.title}${a.state === "planned" ? " (예정)" : ""}`))),
+      shared.length ? h("optgroup", { label: "공용 에이전트" }, shared.map((a) => h("option", { value: a.name, selected: n.who === a.name }, a.title))) : null,
+      !pool.some((a) => a.name === n.who) && n.who && n.who !== "사람" ? h("option", { value: n.who, selected: true }, n.who) : null);
+    const kindSel = h("select", { class: "input", "aria-label": `${n.label} 종류`, onchange: (e) => { n.kind = e.target.value; dirty(); } }, KIND.map(([k, l]) => h("option", { value: k, selected: n.kind === k }, l)));
+    const a = pool.find((x) => x.name === n.who);
+    return h("tr", {}, h("td", { class: "nowrap small" }, i + 1), h("td", {}, h("b", {}, n.label), n.note ? h("div", { class: "small" }, n.note) : null),
+      h("td", { style: "min-width:120px" }, kindSel), h("td", { style: "min-width:220px" }, whoSel),
+      h("td", { class: "nowrap" }, a ? h("span", { class: "lz " + (AGENT_STATE[a.state] || ["", ""])[1] }, (AGENT_STATE[a.state] || [a.state])[0]) : n.who === "사람" || n.kind === "human" ? h("span", { class: "lz yellow" }, "사람") : "-"),
+      h("td", { class: "nowrap small" }, live(n.who) ? h("span", { class: "lz green" }, `작업 중 ${live(n.who)}`) : "-"));
+  });
+  const loadBox = h("div", { class: "assign-load" });
+  const drawLoad = () => {
+    const by = {}; for (const n of order) if (n.who && n.who !== "사람" && n.kind !== "human") (by[n.who] = by[n.who] || []).push(n.label);
+    const tool = (S.tools || []).find((t) => t.id === g.tool) || { agents: [] };
+    const people = pool.filter((a) => by[a.name] || g.agents.includes(a));
+    loadBox.replaceChildren(...people.map((a) => { const steps = by[a.name] || []; const codeOnly = order.some((n) => n.who === a.name) && order.filter((n) => n.who === a.name).every((n) => n.kind === "code");
+      const can = g.tool && tool.agents.includes(a.name) && a.state !== "planned" && !codeOnly;
+      const runs = S.runs.filter((r) => r.agent === a.name);
+      return h("div", { class: "card assign-card" + (a.state === "planned" ? " planned" : "") },
+        h("div", { class: "row" }, avatar(a.name), h("div", { class: "grow", style: "min-width:0" }, h("b", {}, a.title), h("div", { class: "small mono" }, a.name)), h("span", { class: "lz " + (AGENT_STATE[a.state] || ["", ""])[1] }, (AGENT_STATE[a.state] || [a.state])[0])),
+        h("div", { class: "small", style: "margin:8px 0" }, steps.length ? ["맡은 단계: ", steps.map((s) => h("span", { class: "tag" }, s))] : "맡은 단계 없음"),
+        h("div", { class: "small" }, `실행 ${runs.length}건 · 승인 대기 ${runs.filter((r) => r.status === "awaiting_approval").length}`),
+        h("div", { class: "row", style: "margin-top:10px;gap:6px" },
+          can ? h("button", { class: "btn sm primary", onclick: () => quickCreate({ tool: g.tool, agent: a.name }) }, ic("play", 14), "업무 주기")
+            : h("span", { class: "small", title: "부서 설정에서 이 에이전트를 연결하면 직접 업무를 줄 수 있습니다" }, a.state === "planned" ? "예정(아직 못 부름)" : codeOnly ? "코드 검사 — 자동으로 돎" : g.tool ? "부서에 연결 안 됨" : ""),
+          h("button", { class: "btn sm subtle", onclick: () => openAgent(a, g.agents.includes(a) ? g : S.groups.find((x) => x.id === "shared")) }, "자세히"))); }));
+  };
+  drawLoad();
+  const chips = h("div", { class: "assign-depts" }, groups.map((x) => h("button", { class: "chip-btn" + (x.id === g.id ? " on" : ""), onclick: () => {
+    if (root.dataset.dirty === "1" && !confirm("저장하지 않은 배정이 있습니다. 버리고 다른 부서로 갈까요?")) return;
+    ui.assign.dept = x.id; store.set("assignDept", x.id); renderAssign(root); } }, deptIcon(x), " ", deptName(x))));
+  root.replaceChildren(...pageHead("업무 배정", [h("span", {}, "부서별 담당")], [undo, saveBtn, h("a", { class: "btn", href: "#dept/" + g.id }, "부서 화면")]),
+    h("p", { class: "dept-purpose" }, "부서마다 워크플로우 단계의 담당(에이전트·사람·코드 검사)을 정하고, 담당 에이전트에게 바로 업무를 줍니다. 저장하면 워크플로우 편집기에도 같은 내용이 반영됩니다."),
+    chips,
+    h("div", { class: "assign-cols" },
+      h("section", { class: "card", style: "padding:0" }, h("div", { class: "card-h", style: "padding:14px 16px 4px" }, h("h3", {}, `${deptIcon(g)} ${deptName(g)} — 단계별 담당`), h("span", { class: "small" }, `${order.length}단계`)),
+        h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["#", "단계", "종류", "담당", "상태", "지금"].map((t) => h("th", {}, t)))), h("tbody", {}, rows))),
+      h("section", {}, h("h3", { class: "sec", style: "margin-top:0" }, "담당별 업무"), loadBox)));
 }

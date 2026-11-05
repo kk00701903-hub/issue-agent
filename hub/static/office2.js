@@ -76,7 +76,9 @@ export function mount(container, data, cb = {}) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.className = "o2-gl";
   renderer.domElement.setAttribute("aria-label", "에이전트 사무실 화면");
-  room.append(bg, renderer.domElement, tags, tray);
+  const zoom = el("div", "o2-zoom");   // 부서를 고르면 그림과 3D만 확대(이름표는 그대로 또렷하게)
+  zoom.append(bg, renderer.domElement);
+  room.append(zoom, tags, tray);
   view.append(room); stage.append(view);
   container.replaceChildren(tabs, stage);
 
@@ -92,7 +94,7 @@ export function mount(container, data, cb = {}) {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), new THREE.ShadowMaterial({ opacity: 0.16 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(11, 0.002, 11); ground.receiveShadow = true; scene.add(ground);
 
-  R = { container, tabs, stage, room, tags, tray, renderer, scene, camera, cb, data: null, focus: null, people: new Map(), zones: [], zoneOf: new Map(),
+  R = { zoomEl: zoom, zs: 1, ztx: 0, zty: 0, zt: { s: 1, tx: 0, ty: 0 }, container, tabs, stage, room, tags, tray, renderer, scene, camera, cb, data: null, focus: null, people: new Map(), zones: [], zoneOf: new Map(),
     furn: new THREE.Group(), clock: new THREE.Clock(), raf: 0, sel: null, prevRuns: new Map(), model: null, sig: "", fsig: "", w: 0, h: 0, lounge: new Set() };
   scene.add(R.furn);
   const fit = () => {
@@ -135,7 +137,10 @@ export function resetView() { if (R) { R.focus = null; applyFocus(); } }
 // ---------- 좌표 ----------
 const _v = new THREE.Vector3();
 const W = (x, z, y = 0) => new THREE.Vector3(x, y, z);
-function toPx(v) { _v.copy(v).project(R.camera); return { x: (_v.x + 1) / 2, y: (1 - _v.y) / 2 }; }
+function toPx(v) {   // 3D 점 → 화면 위치(사무실 칸 기준 0~1). 부서 확대 중이면 확대한 위치
+  _v.copy(v).project(R.camera);
+  return { x: ((_v.x + 1) / 2) * R.zs + R.ztx, y: ((1 - _v.y) / 2) * R.zs + R.zty };
+}
 function cellXZ(c) { return { x: ORIGIN[c[0]], z: ORIGIN[c[1]], ex: LINES[c[0] + 1] - ORIGIN[c[0]], ez: LINES[c[1] + 1] - ORIGIN[c[1]] }; }
 function local(z, u, v) { return W(z.x + (u === "EX" ? z.ex : u), z.z + (v === "EZ" ? z.ez : v)); }
 
@@ -256,7 +261,20 @@ function drawTabs() {
 function applyFocus() {
   if (!R) return;
   for (const p of R.people.values()) p.tag.classList.toggle("dim", !!R.focus && p.z.id !== R.focus);
-  for (const z of R.zones) if (z.label) z.label.classList.toggle("on", z.id === R.focus);
+  for (const z of R.zones) {
+    if (z.label) { z.label.classList.toggle("on", z.id === R.focus); z.label.classList.toggle("dim", !!R.focus && z.id !== R.focus); }
+    if (z.floor) z.floor.material.opacity = z.id === R.focus ? 0.32 : 0;
+  }
+  // 고른 부서를 화면 가운데로 크게(그림·3D만 확대, 이름표는 위치만 따라감)
+  const z = R.focus && R.zones.find((x) => x.id === R.focus);
+  if (z) {
+    const c = cellXZ(z.c), save = [R.zs, R.ztx, R.zty]; R.zs = 1; R.ztx = R.zty = 0;
+    const q = toPx(W(c.x + CELL / 2, c.z + CELL / 2, 0.8)); [R.zs, R.ztx, R.zty] = save;
+    const s = R.w < 700 ? 2.6 : 2.3, vcx = (VIEW.x0 + VIEW.x1) / 2, vcy = (VIEW.y0 + VIEW.y1) / 2;
+    R.zt = { s, tx: vcx - q.x * s, ty: vcy - q.y * s };
+  } else R.zt = { s: 1, tx: 0, ty: 0 };
+  const pr = Math.min(3, (window.devicePixelRatio || 1) * R.zt.s);   // 확대해도 흐리지 않게
+  if (Math.abs(R.renderer.getPixelRatio() - pr) > 0.01) { R.renderer.setPixelRatio(pr); R.renderer.setSize(R.w, R.h); }
 }
 
 // ---------- 가구(책상·의자·파티션) ----------
@@ -302,6 +320,8 @@ function buildFurniture() {
   R.screens = new Map();
   for (const z of R.zones) {
     const c = cellXZ(z.c), g = new THREE.Group(); g.position.set(c.x, 0, c.z); R.furn.add(g);
+    z.floor = new THREE.Mesh(new THREE.PlaneGeometry(CELL + 0.6, CELL + 0.6), new THREE.MeshBasicMaterial({ color: z.tint, transparent: true, opacity: 0, depthWrite: false }));
+    z.floor.rotation.x = -Math.PI / 2; z.floor.position.set(CELL / 2, 0.006, CELL / 2); g.add(z.floor);   // 부서를 고르면 바닥이 부서 색으로
     const rail = new THREE.MeshStandardMaterial({ color: z.tint, roughness: 0.6 });
     // 구역 뒤쪽 두 변 파티션(보는 사람 반대쪽이라 사람을 가리지 않음). 앞쪽 두 변은 통로로 열려 있다.
     panel(g, 0.05, 0.05, CELL, 0.05, 1.2, M.panel, rail);
@@ -637,6 +657,11 @@ function paper(a, b, color) {
   requestAnimationFrame(() => requestAnimationFrame(() => { e.style.left = b.x * 100 + "%"; e.style.top = b.y * 100 + "%"; e.style.opacity = "0"; }));
   setTimeout(() => e.remove(), 1400);
 }
+function placeFixed() {   // 확대·축소 중에도 부서 이름표·장소 이름·결재함이 제자리를 따라가게
+  for (const z of R.zones) if (z.label) { const c = cellXZ(z.c), q = toPx(W(c.x + 2.4, c.z + 0.1, 1.3)); z.label.style.left = q.x * 100 + "%"; z.label.style.top = q.y * 100 + "%"; }
+  for (const x of R.places || []) { const q = toPx(W(x.x, x.z, x.y)); x.e.style.left = q.x * 100 + "%"; x.e.style.top = q.y * 100 + "%"; }
+  const tp = toPx(W(0.55, 16.4, 1.15)); R.tray.style.left = tp.x * 100 + "%"; R.tray.style.top = tp.y * 100 + "%";
+}
 function drawZoneLabels() {
   for (const z of R.zones) {
     if (!z.label) {
@@ -661,6 +686,9 @@ function loop(now) {
   R.raf = requestAnimationFrame(loop);
   if (!R.container.isConnected) { dispose(); return; }
   const dt = Math.min(0.05, R.clock.getDelta());
+  const k = reduce ? 1 : Math.min(1, dt * 6);   // 부드럽게 확대·축소
+  R.zs += (R.zt.s - R.zs) * k; R.ztx += (R.zt.tx - R.ztx) * k; R.zty += (R.zt.ty - R.zty) * k;
+  R.zoomEl.style.transform = `translate(${R.ztx * 100}%, ${R.zty * 100}%) scale(${R.zs})`;
   for (const p of R.people.values()) {
     p.mixer.update(dt);
     if (p.walk) stepWalk(p, dt); else maybeWander(p, now);
@@ -677,6 +705,7 @@ function loop(now) {
   }
   greetings(now);
   wanderDispatch(now);
+  if (Math.abs(R.zs - R.zt.s) > 0.001 || R.focus) placeFixed();
   const sp = R.sel && R.people.get(R.sel);   // 누른 직원의 생각 말풍선(실제 기록으로 만든 문장)
   if (R.think) {
     R.think.hidden = !(sp && sp.a.thought);
@@ -688,7 +717,7 @@ function loop(now) {
   R.renderer.render(R.scene, R.camera);
 }
 function pick(ev) {
-  const r = R.renderer.domElement.getBoundingClientRect();
+  const r = R.room.getBoundingClientRect();
   const x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
   let best = null, bd = 0.03;
   for (const p of R.people.values()) {

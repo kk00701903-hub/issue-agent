@@ -70,6 +70,14 @@
         "role": "경쟁 앱의 공개 리뷰에서 사용자가 싫어하는 점을 모아 내 앱에서 고칠 목록을 만든다.",
         "tools": "WebSearch, Read, Write",
         "forbidden": "남의 앱 코드·디자인·상표·문구 복제, 역설계, 「복제해서 팔기」"
+      },
+      {
+        "name": "geo-viewer",
+        "title": "공간 정보 보기",
+        "state": "planned",
+        "role": "God's Eye View(오픈소스 3D 지구본·위성 자료)로 물류 거점·현장 위치를 지도 위에 보여 주는 참고 화면을 만든다(물류 디지털 트윈 기획 참고용).",
+        "tools": "웹앱, Read",
+        "forbidden": "개인 위치 추적, 특정인 주소 조회"
       }
     ]
   },

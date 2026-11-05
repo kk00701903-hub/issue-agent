@@ -203,6 +203,21 @@ def _local_agents():
     return store.read_json(LOCAL_AGENTS, {}) or {}
 
 
+def _local_untouched():
+    """data/agents.local.json 이 옛 hub/agents.json 을 그대로 옮긴 사본인지(고객이 고친 적 없음)."""
+    old = store.HUB / "agents.json"
+    try:
+        return LOCAL_AGENTS.exists() and old.exists() and LOCAL_AGENTS.read_bytes() == old.read_bytes()
+    except OSError:
+        return False
+
+
+def _has_definition(tool_id, name):
+    if not re.match(r"^[a-z0-9-]+$", name or ""):
+        return False
+    return (TOOLS_DIR / tool_id / "agents" / f"{name}.md").exists() or (store.ROOT / ".claude" / "agents" / f"{name}.md").exists()
+
+
 def all_agent_names():
     names = set()
     for m in manifests().values():
@@ -217,6 +232,9 @@ def all_agent_names():
 def teams(include_disabled=False):
     """관리 화면·사무실에 보일 팀 목록. 고객 수정분(data/agents.local.json)을 이름 기준으로 덮어쓴다."""
     local = {g.get("id"): g for g in _local_agents().get("groups", [])}
+    # 옛 설치본에서 옮겨 온 그대로(고객이 고치지 않은) 사본이면 이름·상태를 덮어쓰지 않는다 — 도구 정의(tools/*/tool.json)가 최신이다
+    pristine = _local_untouched()
+    tool_names = {a["name"] for m in manifests().values() for a in (m.get("team") or {}).get("agents", [])}
     out = []
     for tid, m in manifests().items():
         t = m.get("team")
@@ -226,15 +244,24 @@ def teams(include_disabled=False):
         t["tool"] = tid
         lg = local.get(t["id"])
         if lg:
-            for k in ("title", "purpose", "lead", "flow", "status_step"):
-                if k in lg:
-                    t[k] = lg[k]
+            if not pristine:
+                for k in ("title", "purpose", "lead", "flow", "status_step"):
+                    if k in lg:
+                        t[k] = lg[k]
             by = {a["name"]: a for a in t["agents"]}
             for a in lg.get("agents", []):
                 if a.get("name") in by:
-                    by[a["name"]].update(a)
-                else:
+                    if not pristine:
+                        by[a["name"]].update(a)
+                elif a.get("name") not in tool_names:   # 다른 팀에 정의된 에이전트는 겹쳐 넣지 않는다
                     t["agents"].append(a)
+        # 정의 파일(tools/<도구>/agents/<이름>.md 또는 .claude/agents)이 있는데 「예정」이면 「준비됨」으로 보인다
+        for a in t["agents"]:
+            if a.get("state") == "planned" and _has_definition(tid, a.get("name", "")):
+                a["state"] = "ready"
+        rank = {"active": 0, "ready": 1, "optional": 2, "planned": 3}
+        lead = t.get("lead")
+        t["agents"].sort(key=lambda a: (a.get("name") != lead, rank.get(a.get("state"), 2)))
         out.append(t)
     # 도구에 없는 고객 팀(직접 만든 팀)도 보인다
     have = {t["id"] for t in out}
